@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 import itertools
 import logging
+import random
 from typing import List, Optional
 
 from src.browser.playwright_worker import PlaywrightWorker
@@ -44,10 +45,11 @@ class BotOrchestrator:
             started_at = datetime.now().isoformat()
             worker = PlaywrightWorker(worker_id=worker_id, config=self.config)
 
-            # Jitter leve no início para não abrir 5 janelas no exato mesmo milissegundo
-            await random_async_sleep(0.5, 3.0)
-
             try:
+                # Escalonamento suave para inicializar instâncias sem sobrecarregar a CPU
+                stagger = (worker_id - 1) * 1.5 + random.uniform(0.5, 2.0)
+                await asyncio.sleep(stagger)
+
                 stats = await worker.execute_session(url=url, session_id=session_id)
             except asyncio.CancelledError:
                 stats = {
@@ -121,7 +123,10 @@ class BotOrchestrator:
 
         # Aguarda a finalização de todas as sessões
         try:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results:
+                if isinstance(res, Exception) and not isinstance(res, asyncio.CancelledError):
+                    logger.error(f"Erro inesperado em worker: {res}")
         except asyncio.CancelledError:
             pass
         finally:
