@@ -170,6 +170,13 @@ async def watch_video(
 
         stats["actual_watch_time"] = round(accumulated_watch_time, 1)
 
+        # Log de progresso periódico a cada ~60 segundos
+        if int(accumulated_watch_time) > 0 and int(accumulated_watch_time) % 60 < sleep_duration:
+            logger.info(
+                f"[Worker {worker_id}] ⏱️ Progresso: {accumulated_watch_time:.0f}s / {target_watch_seconds}s "
+                f"({accumulated_watch_time / 60:.1f} / {target_watch_seconds / 60:.1f} min)"
+            )
+
         # Intervalo do polling com pequeno jitter para simular comportamento natural
         sleep_duration = max(1.0, config.poll_interval)
         await asyncio.sleep(sleep_duration)

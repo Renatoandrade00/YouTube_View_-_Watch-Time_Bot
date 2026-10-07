@@ -32,6 +32,7 @@ class PlaywrightWorker:
             "--disable-background-timer-throttling",
             "--disable-backgrounding-occluded-windows",
             "--disable-renderer-backgrounding",
+            "--autoplay-policy=no-user-gesture-required",
         ]
         if self.config.mute_audio:
             browser_args.append("--mute-audio")
@@ -46,7 +47,6 @@ class PlaywrightWorker:
                 user_agent=get_random_user_agent(),
                 viewport=get_random_viewport(),
                 locale="pt-BR",
-                permissions=["autoplay"],
             )
 
             page = await context.new_page()
