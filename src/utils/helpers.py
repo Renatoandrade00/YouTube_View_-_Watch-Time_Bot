@@ -43,9 +43,12 @@ async def random_async_sleep(min_seconds: float, max_seconds: float) -> float:
 
 
 def normalize_youtube_url(url: str) -> str:
-    """Normaliza links curtos ou variações de URLs do YouTube."""
+    """Normaliza links curtos ou variações de URLs do YouTube, isolando o ID do vídeo."""
     url = url.strip()
     if "youtu.be/" in url:
         video_id = url.split("youtu.be/")[1].split("?")[0].split("&")[0]
+        return f"https://www.youtube.com/watch?v={video_id}"
+    if "watch?v=" in url:
+        video_id = url.split("watch?v=")[1].split("&")[0]
         return f"https://www.youtube.com/watch?v={video_id}"
     return url

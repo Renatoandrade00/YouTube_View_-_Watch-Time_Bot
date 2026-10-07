@@ -31,6 +31,9 @@ class BotConfig(BaseModel):
     save_session_logs: bool = Field(default=True, description="Salvar logs de cada sessão em arquivo JSONL")
     logs_dir: str = Field(default="logs", description="Diretório de saída para arquivos de log")
 
+    max_runtime_hours: Optional[float] = Field(default=None, description="Tempo máximo total de execução do bot em horas")
+    continuous: bool = Field(default=False, description="Modo contínuo sem limite fixo de sessões")
+
     @field_validator("max_watch")
     @classmethod
     def validate_watch_range(cls, v: int, info) -> int:
@@ -108,6 +111,8 @@ def load_config(
         "LOG_LEVEL": ("log_level", str),
         "SAVE_SESSION_LOGS": ("save_session_logs", lambda v: v.lower() in ("true", "1", "yes")),
         "LOGS_DIR": ("logs_dir", str),
+        "MAX_RUNTIME_HOURS": ("max_runtime_hours", float),
+        "CONTINUOUS": ("continuous", lambda v: v.lower() in ("true", "1", "yes")),
     }
 
     for env_var, (field_name, converter) in env_mappings.items():

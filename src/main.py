@@ -77,6 +77,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Permitir áudio do vídeo",
     )
 
+    parser.add_argument("--duration-hours", type=float, default=None, help="Tempo máximo total de execução em horas (ex: 6.0)")
+    parser.add_argument("--continuous", action="store_true", default=None, help="Executar continuamente sem limite fixo de sessões")
     parser.add_argument("--config", type=str, default="config.yaml", help="Caminho para arquivo YAML de configuração")
     return parser
 
@@ -97,6 +99,8 @@ async def main_async() -> None:
         "max_watch": args.max_watch,
         "headless": args.headless,
         "mute_audio": args.mute_audio,
+        "max_runtime_hours": args.duration_hours,
+        "continuous": args.continuous,
     }
 
     try:
