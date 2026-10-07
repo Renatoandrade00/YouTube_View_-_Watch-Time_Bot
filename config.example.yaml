@@ -1,0 +1,22 @@
+# Configuração Geral do YouTube View & Watch-Time Bot
+target:
+  url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  urls_file: null
+  total_views: 10
+
+execution:
+  workers: 2
+  min_watch_seconds: 45
+  max_watch_seconds: 120
+  headless: false
+  mute_audio: true
+
+monitoring:
+  poll_interval_seconds: 5
+  skip_ads: true
+  auto_continue: true
+
+logging:
+  level: "INFO"
+  save_session_logs: true
+  logs_dir: "logs"
