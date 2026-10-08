@@ -27,14 +27,45 @@ class BotOrchestrator:
         self.active_tasks: List[asyncio.Task] = []
         self._session_lock = asyncio.Lock()
         self._global_session_id = 0
+        self._monitor_task: Optional[asyncio.Task] = None
+        self.max_end_time: Optional[float] = None
 
     def stop(self) -> None:
         """Sinaliza para todos os workers pararem a execução imediatamente."""
-        logger.warning("🛑 Sinal de interrupção recebido. Finalizando tarefas ativas...")
-        self.stop_event.set()
+        if not self.stop_event.is_set():
+            logger.warning("🛑 Sinal de interrupção recebido. Finalizando tarefas ativas...")
+            self.stop_event.set()
+        if self._monitor_task and not self._monitor_task.done():
+            self._monitor_task.cancel()
         for task in self.active_tasks:
             if not task.done():
                 task.cancel()
+
+    async def _round_duration_monitor(self, max_seconds: float) -> None:
+        """Monitora o tempo total da rodada. Quando atingir a duração máxima, encerra todos os workers."""
+        try:
+            logger.info(
+                f"⏱️ Temporizador da Rodada ativado: Duração Total de {self.config.max_runtime_hours}h "
+                f"({max_seconds:.0f}s)."
+            )
+            await asyncio.wait_for(self.stop_event.wait(), timeout=max_seconds)
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"⏰ [Duração Total da Rodada Atingida] O tempo de {self.config.max_runtime_hours}h "
+                f"({max_seconds:.0f}s) expirou! Encerrando todos os workers imediatamente..."
+            )
+            try:
+                from src.web.state import StateManager
+                sm = StateManager.get_instance()
+                sm.append_log(
+                    f"⏰ Duração Total da Rodada atingida ({self.config.max_runtime_hours}h). "
+                    "Encerrando todos os workers automaticamente..."
+                )
+            except Exception:
+                pass
+            self.stop()
+        except asyncio.CancelledError:
+            pass
 
     async def _get_next_session_id(self) -> int:
         """Gera um ID único e incremental de sessão de forma assíncrona segura."""
@@ -48,7 +79,12 @@ class BotOrchestrator:
         worker = PlaywrightWorker(worker_id=worker_id, config=self.config)
 
         try:
-            stats = await worker.execute_session(url=url, session_id=session_id)
+            stats = await worker.execute_session(
+                url=url,
+                session_id=session_id,
+                stop_event=self.stop_event,
+                max_end_time=self.max_end_time
+            )
         except asyncio.CancelledError:
             stats = {
                 "session_id": session_id,
@@ -59,7 +95,7 @@ class BotOrchestrator:
                 "ads_skipped": 0,
                 "continue_dialogs_clicked": 0,
                 "status": "INTERRUPTED",
-                "error_message": "Sessão cancelada por interrupção do usuário",
+                "error_message": "Sessão cancelada por encerramento da rodada ou pelo usuário",
             }
         except Exception as e:
             stats = {
@@ -104,9 +140,12 @@ class BotOrchestrator:
         max_runtime_seconds: Optional[float],
         global_start: float
     ) -> None:
-        """Loop contínuo de um worker: assiste vídeos da lista sequencialmente até o tempo limite."""
+        """Loop contínuo de um worker: assiste ao vídeo até o watch time máximo, reinicia e continua até atingir a Duração Total da Rodada."""
         stagger = (worker_id - 1) * 1.5 + random.uniform(0.5, 2.0)
-        await asyncio.sleep(stagger)
+        try:
+            await asyncio.sleep(stagger)
+        except asyncio.CancelledError:
+            return
 
         # Distribui cada worker em um ponto diferente da lista de vídeos
         url_idx = (worker_id - 1) % len(urls)
@@ -116,25 +155,40 @@ class BotOrchestrator:
                 elapsed = time.time() - global_start
                 if elapsed >= max_runtime_seconds:
                     logger.info(
-                        f"[Worker {worker_id}] ⏳ Meta total de tempo atingida ({elapsed / 3600:.1f}h). "
-                        "Encerrando rotina do worker."
+                        f"[Worker {worker_id}] ⏳ Duração Total da Rodada atingida ({elapsed / 3600:.2f}h). "
+                        "Encerrando worker."
                     )
                     break
 
             target_url = urls[url_idx]
-            url_idx = (url_idx + 1) % len(urls)
+            if len(urls) > 1:
+                url_idx = (url_idx + 1) % len(urls)
+
             session_id = await self._get_next_session_id()
 
             await self._execute_single_session(worker_id=worker_id, url=target_url, session_id=session_id)
 
+            # Após o watch time máximo atingido da sessão:
             if not self.stop_event.is_set():
-                # Pausa natural realista entre a troca de vídeos (tempo de escolha do usuário)
+                if max_runtime_seconds is not None:
+                    elapsed = time.time() - global_start
+                    if elapsed >= max_runtime_seconds:
+                        logger.info(
+                            f"[Worker {worker_id}] ⏳ Duração Total da Rodada atingida ({elapsed / 3600:.2f}h). "
+                            "Encerrando worker."
+                        )
+                        break
+
+                logger.info(
+                    f"[Worker {worker_id}] 🔄 Watch time máximo concluído. Reiniciando vídeo para continuar assistindo até a Duração Total da Rodada."
+                )
+
                 delay_between = random.uniform(
                     self.config.min_delay_between_videos,
                     self.config.max_delay_between_videos
                 )
                 logger.info(
-                    f"[Worker {worker_id}] ☕ Pausa natural antes do próximo vídeo: {delay_between:.1f}s"
+                    f"[Worker {worker_id}] ☕ Pausa breve antes de reiniciar o vídeo: {delay_between:.1f}s"
                 )
                 try:
                     from src.web.state import StateManager
@@ -142,12 +196,16 @@ class BotOrchestrator:
                     if sm.is_running:
                         sm.update_worker(
                             worker_id=worker_id,
-                            status="Pausa Natural",
+                            status="Reiniciando Vídeo",
                             current_watch_time=0.0
                         )
                 except Exception:
                     pass
-                await asyncio.sleep(delay_between)
+
+                try:
+                    await asyncio.sleep(delay_between)
+                except asyncio.CancelledError:
+                    break
 
     async def run(self) -> None:
         """Executa a orquestração dos workers de acordo com as configurações."""
@@ -161,9 +219,18 @@ class BotOrchestrator:
         max_runtime_seconds = (
             self.config.max_runtime_hours * 3600.0 if self.config.max_runtime_hours else None
         )
+        self.max_end_time = (global_start + max_runtime_seconds) if max_runtime_seconds else None
 
         logger.info(f"🚀 Iniciando orquestrador com [bold cyan]{self.config.workers}[/bold cyan] workers.")
         logger.info(f"📋 Total de vídeos na lista: [bold yellow]{len(urls)}[/bold yellow] URLs.")
+
+        tasks: List[asyncio.Task] = []
+
+        # Se houver limite de tempo definido, ativa o monitor automático da rodada
+        if max_runtime_seconds is not None:
+            self._monitor_task = asyncio.create_task(
+                self._round_duration_monitor(max_runtime_seconds)
+            )
 
         if is_continuous:
             duration_desc = f"{self.config.max_runtime_hours}h" if self.config.max_runtime_hours else "ininterrupto"
@@ -183,7 +250,6 @@ class BotOrchestrator:
         else:
             logger.info(f"🎯 Meta total de visualizações: [bold green]{self.config.total_views}[/bold green] sessões.")
             url_cycle = itertools.cycle(urls)
-            tasks = []
             for _ in range(self.config.total_views):
                 if self.stop_event.is_set():
                     break
@@ -210,4 +276,6 @@ class BotOrchestrator:
         except asyncio.CancelledError:
             pass
         finally:
-            logger.info("🏁 Todas as sessões foram processadas.")
+            if self._monitor_task and not self._monitor_task.done():
+                self._monitor_task.cancel()
+            logger.info("🏁 Todos os workers foram encerrados.")

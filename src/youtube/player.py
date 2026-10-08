@@ -79,7 +79,9 @@ async def watch_video(
     url: str,
     target_watch_seconds: int,
     config: BotConfig,
-    worker_id: int
+    worker_id: int,
+    stop_event: asyncio.Event | None = None,
+    max_end_time: float | None = None,
 ) -> Dict[str, Any]:
     """
     Navega até a URL do YouTube e monitora a reprodução até o tempo limite desejado.
@@ -106,6 +108,14 @@ async def watch_video(
         logger.error(f"[Worker {worker_id}] ❌ Erro ao navegar para o vídeo: {e}")
         return stats
 
+    # Se a rodada já acabou ou foi solicitado stop durante o carregamento
+    if stop_event and stop_event.is_set():
+        stats["error_message"] = "Interrupção solicitada"
+        return stats
+    if max_end_time and time.time() >= max_end_time:
+        stats["error_message"] = "Duração Total da Rodada atingida"
+        return stats
+
     # Lida com consentimento de cookies se aparecer
     await handle_consent_popups(page)
     await random_async_sleep(1.0, 2.5)
@@ -117,8 +127,17 @@ async def watch_video(
     last_active_time = start_time
     accumulated_watch_time = 0.0
     last_video_current_time = 0.0
+    sleep_duration = max(1.0, config.poll_interval)
 
     while accumulated_watch_time < target_watch_seconds:
+        # Verifica se o bot foi parado ou se a Duração Total da Rodada encerrou
+        if stop_event and stop_event.is_set():
+            logger.info(f"[Worker {worker_id}] 🛑 Interrupção detectada. Encerrando reprodução.")
+            break
+        if max_end_time and time.time() >= max_end_time:
+            logger.info(f"[Worker {worker_id}] ⏰ Fim da Duração Total da Rodada atingido durante a reprodução. Encerrando.")
+            break
+
         current_now = time.time()
         elapsed_loop = current_now - last_active_time
         last_active_time = current_now
@@ -150,11 +169,27 @@ async def watch_video(
 
             if video_state.get("exists"):
                 if video_state.get("ended"):
-                    logger.info(f"[Worker {worker_id}] 🏁 Vídeo finalizou antes da meta. Encerrando sessão.")
+                    # O vídeo terminou antes da meta: reinicia o vídeo do início para completar o watch time
+                    logger.info(
+                        f"[Worker {worker_id}] 🔄 Vídeo finalizou aos {accumulated_watch_time:.0f}s. "
+                        f"Reiniciando do início para continuar assistindo até a meta ({target_watch_seconds}s)..."
+                    )
                     accumulated_watch_time += elapsed_loop
-                    break
-
-                if video_state.get("paused"):
+                    try:
+                        await page.evaluate("""() => {
+                            const video = document.querySelector('video');
+                            if (video) {
+                                video.currentTime = 0;
+                                video.play().catch(() => {});
+                            }
+                        }""")
+                        replay_btn = page.locator("button.ytp-play-button[title*='Repetir'], button.ytp-play-button[title*='Replay'], .ytp-play-button").first
+                        if await replay_btn.is_visible(timeout=300):
+                            await replay_btn.click(timeout=300, force=True)
+                        await ensure_video_playing(page, mute_audio=config.mute_audio)
+                    except Exception as err:
+                        logger.debug(f"[Worker {worker_id}] Erro ao reiniciar reprodução do vídeo: {err}")
+                elif video_state.get("paused"):
                     # Se pausado, tenta retomar
                     await ensure_video_playing(page, mute_audio=config.mute_audio)
                 else:
@@ -202,7 +237,7 @@ async def watch_video(
 
     stats["actual_watch_time"] = round(accumulated_watch_time, 1)
     stats["status"] = "SUCCESS" if accumulated_watch_time >= 25.0 else "FAILED"
-    logger.info(f"[Worker {worker_id}] ✅ Sessão concluída! Assistido: {stats['actual_watch_time']}s / Meta: {target_watch_seconds}s")
+    logger.info(f"[Worker {worker_id}] 🎯 Watch time máximo atingido! Assistido: {stats['actual_watch_time']}s / Meta: {target_watch_seconds}s")
     try:
         from src.web.state import StateManager
         sm = StateManager.get_instance()

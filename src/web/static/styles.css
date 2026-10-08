@@ -554,6 +554,16 @@ input[type="range"] {
     color: var(--warning);
 }
 
+.worker-status-pill.Reiniciando {
+    background: rgba(168, 85, 247, 0.22);
+    color: #c084fc;
+}
+
+.worker-status-pill.Finalizado {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-secondary);
+}
+
 .worker-url {
     font-size: 0.75rem;
     color: var(--text-muted);

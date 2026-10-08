@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import random
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from playwright.async_api import async_playwright, Playwright, Browser, BrowserContext
 
 from src.browser.fingerprint import generate_fingerprint_profile, build_stealth_injection_script
@@ -20,7 +21,13 @@ class PlaywrightWorker:
         self.worker_id = worker_id
         self.config = config
 
-    async def execute_session(self, url: str, session_id: int) -> Dict[str, Any]:
+    async def execute_session(
+        self,
+        url: str,
+        session_id: int,
+        stop_event: Optional[asyncio.Event] = None,
+        max_end_time: Optional[float] = None,
+    ) -> Dict[str, Any]:
         """Abre uma nova instância de navegador, executa a visualização e fecha todos os recursos."""
         normalized_url = normalize_youtube_url(url)
         target_watch_time = random.randint(self.config.min_watch, self.config.max_watch)
@@ -86,6 +93,8 @@ class PlaywrightWorker:
                     target_watch_seconds=target_watch_time,
                     config=self.config,
                     worker_id=self.worker_id,
+                    stop_event=stop_event,
+                    max_end_time=max_end_time,
                 )
                 stats["target_watch_time"] = target_watch_time
                 stats["url"] = normalized_url
@@ -106,6 +115,15 @@ class PlaywrightWorker:
                     "error_message": str(e),
                 }
             finally:
-                await page.close()
-                await context.close()
-                await browser.close()
+                try:
+                    await page.close()
+                except Exception:
+                    pass
+                try:
+                    await context.close()
+                except Exception:
+                    pass
+                try:
+                    await browser.close()
+                except Exception:
+                    pass

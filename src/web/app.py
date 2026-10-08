@@ -57,7 +57,7 @@ app.add_middleware(NoCacheMiddleware)
 class StartBotRequest(BaseModel):
     urls: List[str] = Field(..., min_length=1, description="Lista de URLs de vídeos do YouTube")
     workers: int = Field(default=5, ge=1, le=30)
-    duration_hours: Optional[float] = Field(default=1.0, ge=0.05, le=24.0)
+    duration_hours: Optional[float] = Field(default=1.0, ge=0.01, le=24.0)
     continuous: bool = Field(default=True)
     min_watch_minutes: Optional[float] = Field(default=None)
     max_watch_minutes: Optional[float] = Field(default=None)
@@ -103,13 +103,7 @@ async def _run_bot_task(config: BotConfig, orchestrator: BotOrchestrator) -> Non
     except Exception as e:
         logger.error(f"Erro inesperado durante a orquestração: {e}")
     finally:
-        state_manager.is_running = False
-        state_manager.orchestrator = None
-        state_manager.orchestrator_task = None
-        state_manager.append_log("🛑 Sessão de execução finalizada no Dashboard.")
-        # Notifica todos os workers como Concluído ou Aguardando
-        for wid in list(state_manager.workers.keys()):
-            state_manager.update_worker(wid, status="Finalizado")
+        state_manager.finish_run("Duração Total da Rodada concluída. Todos os workers foram encerrados.")
 
 
 @app.post("/api/start")
@@ -196,7 +190,7 @@ async def stop_bot() -> Dict[str, Any]:
     if state_manager.orchestrator_task and not state_manager.orchestrator_task.done():
         state_manager.orchestrator_task.cancel()
 
-    state_manager.is_running = False
+    state_manager.finish_run("Execução cancelada pelo usuário.")
     return {"status": "stopping", "message": "Parada solicitada com sucesso."}
 
 

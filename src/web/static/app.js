@@ -257,7 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     updateMetrics(d.metrics);
                     if (d.workers && d.workers.length > 0) {
                         d.workers.forEach(w => updateWorkerCard(w));
-                        const activeCount = d.workers.filter(w => w.status === "Assistindo" || w.status === "Navegando").length;
+                        const activeCount = d.workers.filter(w => w.status && w.status !== "Finalizado" && w.status !== "Aguardando" && w.status !== "Falha").length;
                         metricWorkersActive.textContent = `${activeCount} / ${d.workers.length}`;
                     }
                     if (d.recent_logs && d.recent_logs.length > 0) {
@@ -268,7 +268,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     updateWorkerCard(msg.data);
                     const activeCount = Array.from(workerElements.values()).filter(c => {
                         const s = c.querySelector(".worker-status-pill");
-                        return s && (s.textContent === "Assistindo" || s.textContent === "Navegando");
+                        const txt = s ? s.textContent : "";
+                        return txt && txt !== "Finalizado" && txt !== "Aguardando" && txt !== "Falha";
                     }).length;
                     metricWorkersActive.textContent = `${activeCount} / ${workerElements.size}`;
                 } else if (msg.type === "METRICS_UPDATE") {
@@ -380,7 +381,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 runtimeVal.textContent = data.elapsed_time || "00:00:00";
                 if (!data.is_running && isRunning) {
                     setRunningState(false);
-                    showToast("Execução finalizada.", "info");
+                    showToast("Duração Total da Rodada concluída. Workers encerrados.", "info");
                 }
             } catch (e) {
                 // silencioso

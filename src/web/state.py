@@ -58,6 +58,7 @@ class StateManager:
         self.orchestrator: Any = None
         self.orchestrator_task: Optional[asyncio.Task] = None
         self.start_timestamp: Optional[datetime] = None
+        self.finish_timestamp: Optional[datetime] = None
 
         # Métricas agregadas
         self.metrics_summary: Dict[str, Any] = {
@@ -186,11 +187,29 @@ class StateManager:
         for ws in dead:
             self.active_connections.discard(ws)
 
+    def finish_run(self, reason: str = "Rodada finalizada.") -> None:
+        self.is_running = False
+        self.finish_timestamp = datetime.now()
+        self.orchestrator = None
+        self.orchestrator_task = None
+        self.append_log(f"🏁 {reason}")
+        for w in self.workers.values():
+            w.status = "Finalizado"
+            self._safe_create_task(self._broadcast({
+                "type": "WORKER_UPDATE",
+                "data": w.to_dict()
+            }))
+        self._safe_create_task(self._broadcast({
+            "type": "INITIAL_STATE",
+            "data": self.get_full_state()
+        }))
+
     def get_full_state(self) -> Dict[str, Any]:
         elapsed_str = "00:00:00"
-        if self.is_running and self.start_timestamp:
-            delta = datetime.now() - self.start_timestamp
-            total_sec = int(delta.total_seconds())
+        if self.start_timestamp:
+            end_time = datetime.now() if self.is_running else (self.finish_timestamp or datetime.now())
+            delta = end_time - self.start_timestamp
+            total_sec = max(0, int(delta.total_seconds()))
             hours, rem = divmod(total_sec, 3600)
             minutes, seconds = divmod(rem, 60)
             elapsed_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
