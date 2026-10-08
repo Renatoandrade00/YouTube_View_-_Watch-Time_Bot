@@ -109,7 +109,8 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="O tempo mínimo de exibição não pode ser maior que o máximo.")
 
     config = BotConfig(
-        urls=cleaned_urls,
+        urls_list=cleaned_urls,
+        target_url=cleaned_urls[0] if len(cleaned_urls) == 1 else None,
         workers=req.workers,
         max_runtime_hours=req.duration_hours,
         continuous=req.continuous,

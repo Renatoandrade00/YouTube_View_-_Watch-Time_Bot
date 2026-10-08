@@ -46,3 +46,11 @@ def test_state_manager_singleton_and_worker_updates():
     )
     assert sm.workers[1].status == "Assistindo"
     assert sm.workers[1].progress_pct == 50.0
+
+
+def test_bot_config_resolve_urls_from_list():
+    from src.config import BotConfig
+    cfg = BotConfig(urls_list=["https://www.youtube.com/watch?v=TESTE1", "https://www.youtube.com/watch?v=TESTE2"])
+    resolved = cfg.resolve_urls()
+    assert len(resolved) == 2
+    assert "https://www.youtube.com/watch?v=TESTE1" in resolved

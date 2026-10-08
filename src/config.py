@@ -48,11 +48,12 @@ class BotConfig(BaseModel):
         return v
 
     def resolve_urls(self) -> List[str]:
-        """Retorna lista consolidada de URLs a partir de target_url ou urls_file."""
-        urls: List[str] = []
+        """Retorna lista consolidada de URLs a partir de urls_list, target_url ou urls_file."""
+        urls: List[str] = [u.strip() for u in self.urls_list if u.strip()]
+
         if self.target_url:
             cleaned = self.target_url.strip()
-            if cleaned:
+            if cleaned and cleaned not in urls:
                 urls.append(cleaned)
 
         if self.urls_file:
@@ -60,7 +61,7 @@ class BotConfig(BaseModel):
             if path.exists() and path.is_file():
                 for line in path.read_text(encoding="utf-8").splitlines():
                     cleaned = line.strip()
-                    if cleaned and not cleaned.startswith("#"):
+                    if cleaned and not cleaned.startswith("#") and cleaned not in urls:
                         urls.append(cleaned)
 
         self.urls_list = urls
