@@ -48,6 +48,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--total-views", type=int, default=None, help="Total de visualizações a executar")
     parser.add_argument("--min-watch", type=int, default=None, help="Tempo mínimo de exibição por sessão em segundos")
     parser.add_argument("--max-watch", type=int, default=None, help="Tempo máximo de exibição por sessão em segundos")
+    parser.add_argument("--min-watch-min", type=float, default=None, help="Tempo mínimo de exibição por sessão em minutos")
+    parser.add_argument("--max-watch-min", type=float, default=None, help="Tempo máximo de exibição por sessão em minutos")
 
     parser.add_argument(
         "--headless",
@@ -135,13 +137,21 @@ async def main_async() -> None:
         await server.serve()
         return
 
+    min_watch = args.min_watch
+    if args.min_watch_min is not None:
+        min_watch = int(args.min_watch_min * 60)
+
+    max_watch = args.max_watch
+    if args.max_watch_min is not None:
+        max_watch = int(args.max_watch_min * 60)
+
     cli_overrides = {
         "target_url": args.url,
         "urls_file": args.urls_file,
         "workers": args.workers,
         "total_views": args.total_views,
-        "min_watch": args.min_watch,
-        "max_watch": args.max_watch,
+        "min_watch": min_watch,
+        "max_watch": max_watch,
         "headless": args.headless,
         "mute_audio": args.mute_audio,
         "max_runtime_hours": args.duration_hours,

@@ -179,7 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <div class="progress-bar" style="width: ${w.progress_pct || 0}%"></div>
                     </div>
                     <div class="progress-info">
-                        <span class="progress-time">${w.current_watch_time || 0}s / ${w.target_watch_time || 0}s</span>
+                        <span class="progress-time">${((w.current_watch_time || 0) / 60).toFixed(1)}m / ${((w.target_watch_time || 0) / 60).toFixed(1)}m (${Math.round(w.current_watch_time || 0)}s)</span>
                         <span class="progress-pct">${w.progress_pct || 0}%</span>
                     </div>
                 </div>
@@ -208,7 +208,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (bar) bar.style.width = `${w.progress_pct || 0}%`;
 
             const timeEl = card.querySelector(".progress-time");
-            if (timeEl) timeEl.textContent = `${w.current_watch_time || 0}s / ${w.target_watch_time || 0}s`;
+            if (timeEl) {
+                timeEl.textContent = `${((w.current_watch_time || 0) / 60).toFixed(1)}m / ${((w.target_watch_time || 0) / 60).toFixed(1)}m (${Math.round(w.current_watch_time || 0)}s)`;
+            }
 
             const pctEl = card.querySelector(".progress-pct");
             if (pctEl) pctEl.textContent = `${w.progress_pct || 0}%`;
@@ -301,13 +303,18 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        const minWatchMin = parseFloat(minWatchInput.value) || 1.0;
+        const maxWatchMin = parseFloat(maxWatchInput.value) || 3.0;
+        const minWatchSec = Math.max(5, Math.round(minWatchMin * 60));
+        const maxWatchSec = Math.max(minWatchSec, Math.round(maxWatchMin * 60));
+
         const payload = {
             urls: urls,
             workers: parseInt(workersSlider.value, 10),
             duration_hours: parseFloat(durationSlider.value),
             continuous: true,
-            min_watch: parseInt(minWatchInput.value, 10),
-            max_watch: parseInt(maxWatchInput.value, 10),
+            min_watch: minWatchSec,
+            max_watch: maxWatchSec,
             min_delay: parseFloat(minDelayInput.value),
             max_delay: parseFloat(maxDelayInput.value),
             headless: toggleHeadless.checked,
