@@ -16,6 +16,12 @@ monitoring:
   skip_ads: true
   auto_continue: true
 
+stealth:
+  enable_anti_fingerprint: true
+  enable_micro_interactions: true
+  min_delay_between_videos_seconds: 5.0
+  max_delay_between_videos_seconds: 15.0
+
 logging:
   level: "INFO"
   save_session_logs: true
