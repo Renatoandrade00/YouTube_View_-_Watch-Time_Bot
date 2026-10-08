@@ -1,7 +1,6 @@
-from __future__ import annotations
-
 import asyncio
 import logging
+import random
 import time
 from typing import Dict, Any
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
@@ -9,6 +8,7 @@ from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 from src.config import BotConfig
 from src.youtube.ads import try_skip_ad
 from src.youtube.continue_watching import handle_continue_watching_dialog
+from src.youtube.interactions import simulate_human_micro_interactions
 from src.utils.helpers import random_async_sleep
 
 logger = logging.getLogger("bot")
@@ -167,6 +167,10 @@ async def watch_video(
 
         except Exception as e:
             logger.debug(f"[Worker {worker_id}] Exceção na verificação periódica: {e}")
+
+        # 4. Micro-interações humanas ocasionais (movimento de mouse, hover no player, scroll sutil)
+        if config.enable_micro_interactions and random.random() < 0.35:
+            await simulate_human_micro_interactions(page, worker_id)
 
         stats["actual_watch_time"] = round(accumulated_watch_time, 1)
 

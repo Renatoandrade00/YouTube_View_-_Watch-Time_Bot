@@ -20,6 +20,9 @@ Automação em Python com **Playwright** para simulação de visualizações, re
 
 ## 🚀 Funcionalidades (MVP)
 
+- **Perfis Anti-Fingerprint Únicos:** Randomização de assinaturas WebGL (vendor/renderer de GPUs reais), micro-ruído imperceptível no Canvas 2D e AudioContext, além de variação de núcleos de CPU e memória RAM por worker.
+- **Simulação de Micro-Comportamento Humano:** Movimentação natural de cursor (mouse jitter gradual), hover temporário no player de vídeo e rolagem suave de página (scroll sutil).
+- **Modo Contínuo & Rotação Inteligente:** Execução contínua por horas (`--duration-hours`) alternando automaticamente para o próximo vídeo da lista com pausas naturais configuráveis.
 - **Suporte a Vídeo Único ou Lista:** Aceita URL individual via CLI ou arquivo com múltiplas URLs.
 - **Watch Time Dinâmico:** Intervalos configuráveis (`min_watch` e `max_watch`) com randomização por sessão.
 - **Superação de "Continuar Assistindo":** Monitoramento ativo e clique automático no diálogo de pausa por inatividade do player.

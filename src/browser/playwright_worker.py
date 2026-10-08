@@ -5,6 +5,7 @@ import random
 from typing import Dict, Any
 from playwright.async_api import async_playwright, Playwright, Browser, BrowserContext
 
+from src.browser.fingerprint import generate_fingerprint_profile, build_stealth_injection_script
 from src.config import BotConfig
 from src.utils.helpers import get_random_user_agent, get_random_viewport, normalize_youtube_url
 from src.youtube.player import watch_video
@@ -48,6 +49,16 @@ class PlaywrightWorker:
                 viewport=get_random_viewport(),
                 locale="pt-BR",
             )
+
+            # Injeção de perfil anti-fingerprint (Canvas, WebGL, AudioContext, Hardware)
+            if self.config.enable_anti_fingerprint:
+                profile = generate_fingerprint_profile(self.worker_id)
+                stealth_script = build_stealth_injection_script(profile)
+                await context.add_init_script(stealth_script)
+                logger.info(
+                    f"[Worker {self.worker_id}] 🛡️ Perfil Anti-Fingerprint ativado "
+                    f"(GPU: {profile.gpu_vendor}, Cores: {profile.hardware_concurrency}, RAM: {profile.device_memory}GB)"
+                )
 
             page = await context.new_page()
 

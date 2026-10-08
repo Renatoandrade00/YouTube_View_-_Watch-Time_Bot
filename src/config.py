@@ -34,6 +34,11 @@ class BotConfig(BaseModel):
     max_runtime_hours: Optional[float] = Field(default=None, description="Tempo máximo total de execução do bot em horas")
     continuous: bool = Field(default=False, description="Modo contínuo sem limite fixo de sessões")
 
+    enable_anti_fingerprint: bool = Field(default=True, description="Ativar injeção de perfis anti-fingerprint (Canvas, WebGL, Audio)")
+    enable_micro_interactions: bool = Field(default=True, description="Ativar micro-interações humanas (mouse, scroll, hover)")
+    min_delay_between_videos: float = Field(default=5.0, ge=1.0, description="Pausa mínima entre vídeos em segundos")
+    max_delay_between_videos: float = Field(default=15.0, ge=1.0, description="Pausa máxima entre vídeos em segundos")
+
     @field_validator("max_watch")
     @classmethod
     def validate_watch_range(cls, v: int, info) -> int:
@@ -113,6 +118,10 @@ def load_config(
         "LOGS_DIR": ("logs_dir", str),
         "MAX_RUNTIME_HOURS": ("max_runtime_hours", float),
         "CONTINUOUS": ("continuous", lambda v: v.lower() in ("true", "1", "yes")),
+        "ENABLE_ANTI_FINGERPRINT": ("enable_anti_fingerprint", lambda v: v.lower() in ("true", "1", "yes")),
+        "ENABLE_MICRO_INTERACTIONS": ("enable_micro_interactions", lambda v: v.lower() in ("true", "1", "yes")),
+        "MIN_DELAY_BETWEEN_VIDEOS": ("min_delay_between_videos", float),
+        "MAX_DELAY_BETWEEN_VIDEOS": ("max_delay_between_videos", float),
     }
 
     for env_var, (field_name, converter) in env_mappings.items():

@@ -79,6 +79,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("--duration-hours", type=float, default=None, help="Tempo máximo total de execução em horas (ex: 6.0)")
     parser.add_argument("--continuous", action="store_true", default=None, help="Executar continuamente sem limite fixo de sessões")
+
+    parser.add_argument(
+        "--no-stealth",
+        dest="enable_anti_fingerprint",
+        action="store_false",
+        default=None,
+        help="Desativar perfis anti-fingerprint (Canvas, WebGL, Audio)",
+    )
+    parser.add_argument(
+        "--no-interactions",
+        dest="enable_micro_interactions",
+        action="store_false",
+        default=None,
+        help="Desativar micro-interações humanas (mouse jitter, hover, scroll)",
+    )
+    parser.add_argument("--min-delay", type=float, default=None, help="Pausa mínima entre vídeos da lista em segundos (padrão: 5.0)")
+    parser.add_argument("--max-delay", type=float, default=None, help="Pausa máxima entre vídeos da lista em segundos (padrão: 15.0)")
+
     parser.add_argument("--config", type=str, default="config.yaml", help="Caminho para arquivo YAML de configuração")
     return parser
 
@@ -101,6 +119,10 @@ async def main_async() -> None:
         "mute_audio": args.mute_audio,
         "max_runtime_hours": args.duration_hours,
         "continuous": args.continuous,
+        "enable_anti_fingerprint": args.enable_anti_fingerprint,
+        "enable_micro_interactions": args.enable_micro_interactions,
+        "min_delay_between_videos": args.min_delay,
+        "max_delay_between_videos": args.max_delay,
     }
 
     try:

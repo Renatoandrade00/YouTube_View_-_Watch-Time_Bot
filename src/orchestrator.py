@@ -121,8 +121,15 @@ class BotOrchestrator:
             await self._execute_single_session(worker_id=worker_id, url=target_url, session_id=session_id)
 
             if not self.stop_event.is_set():
-                # Intervalo suave entre a troca de vídeos
-                await random_async_sleep(2.0, 5.0)
+                # Pausa natural realista entre a troca de vídeos (tempo de escolha do usuário)
+                delay_between = random.uniform(
+                    self.config.min_delay_between_videos,
+                    self.config.max_delay_between_videos
+                )
+                logger.info(
+                    f"[Worker {worker_id}] ☕ Pausa natural antes do próximo vídeo: {delay_between:.1f}s"
+                )
+                await asyncio.sleep(delay_between)
 
     async def run(self) -> None:
         """Executa a orquestração dos workers de acordo com as configurações."""
