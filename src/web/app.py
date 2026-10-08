@@ -40,13 +40,29 @@ state_manager = StateManager.get_instance()
 state_manager.attach_logger()
 
 
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+app.add_middleware(NoCacheMiddleware)
+
 class StartBotRequest(BaseModel):
     urls: List[str] = Field(..., min_length=1, description="Lista de URLs de vídeos do YouTube")
     workers: int = Field(default=5, ge=1, le=30)
     duration_hours: Optional[float] = Field(default=1.0, ge=0.05, le=24.0)
     continuous: bool = Field(default=True)
-    min_watch: int = Field(default=60, ge=10)
-    max_watch: int = Field(default=180, ge=10)
+    min_watch_minutes: Optional[float] = Field(default=None)
+    max_watch_minutes: Optional[float] = Field(default=None)
+    min_watch: Optional[float] = Field(default=None)
+    max_watch: Optional[float] = Field(default=None)
     min_delay: float = Field(default=5.0, ge=1.0)
     max_delay: float = Field(default=15.0, ge=1.0)
     headless: bool = Field(default=True)
@@ -105,8 +121,27 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
     if not cleaned_urls:
         raise HTTPException(status_code=400, detail="Nenhuma URL válida fornecida.")
 
-    if req.min_watch > req.max_watch:
-        raise HTTPException(status_code=400, detail="O tempo mínimo de exibição não pode ser maior que o máximo.")
+    # O valor na tela é SEMPRE interpretado como MINUTOS
+    if req.min_watch_minutes is not None:
+        min_minutes = float(req.min_watch_minutes)
+    elif req.min_watch is not None:
+        min_minutes = float(req.min_watch)
+    else:
+        min_minutes = 1.0
+
+    if req.max_watch_minutes is not None:
+        max_minutes = float(req.max_watch_minutes)
+    elif req.max_watch is not None:
+        max_minutes = float(req.max_watch)
+    else:
+        max_minutes = 3.0
+
+    if min_minutes > max_minutes:
+        raise HTTPException(status_code=400, detail="O tempo mínimo não pode ser maior que o máximo.")
+
+    # Converte minutos para segundos
+    min_watch_sec = max(5, int(round(min_minutes * 60)))
+    max_watch_sec = max(min_watch_sec, int(round(max_minutes * 60)))
 
     config = BotConfig(
         urls_list=cleaned_urls,
@@ -114,8 +149,8 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
         workers=req.workers,
         max_runtime_hours=req.duration_hours,
         continuous=req.continuous,
-        min_watch=req.min_watch,
-        max_watch=req.max_watch,
+        min_watch=min_watch_sec,
+        max_watch=max_watch_sec,
         min_delay_between_videos=req.min_delay,
         max_delay_between_videos=req.max_delay,
         headless=req.headless,

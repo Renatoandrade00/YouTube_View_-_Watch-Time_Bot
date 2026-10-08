@@ -179,7 +179,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <div class="progress-bar" style="width: ${w.progress_pct || 0}%"></div>
                     </div>
                     <div class="progress-info">
-                        <span class="progress-time">${((w.current_watch_time || 0) / 60).toFixed(1)}m / ${((w.target_watch_time || 0) / 60).toFixed(1)}m (${Math.round(w.current_watch_time || 0)}s)</span>
+                        <span class="progress-time">${((w.current_watch_time || 0) / 60).toFixed(1)} min / ${((w.target_watch_time || 0) / 60).toFixed(1)} min</span>
                         <span class="progress-pct">${w.progress_pct || 0}%</span>
                     </div>
                 </div>
@@ -209,7 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const timeEl = card.querySelector(".progress-time");
             if (timeEl) {
-                timeEl.textContent = `${((w.current_watch_time || 0) / 60).toFixed(1)}m / ${((w.target_watch_time || 0) / 60).toFixed(1)}m (${Math.round(w.current_watch_time || 0)}s)`;
+                timeEl.textContent = `${((w.current_watch_time || 0) / 60).toFixed(1)} min / ${((w.target_watch_time || 0) / 60).toFixed(1)} min`;
             }
 
             const pctEl = card.querySelector(".progress-pct");
@@ -303,18 +303,18 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        const minWatchMin = parseFloat(minWatchInput.value) || 1.0;
-        const maxWatchMin = parseFloat(maxWatchInput.value) || 3.0;
-        const minWatchSec = Math.max(5, Math.round(minWatchMin * 60));
-        const maxWatchSec = Math.max(minWatchSec, Math.round(maxWatchMin * 60));
+        const minWatchMin = parseFloat(minWatchInput.value) || 2.0;
+        const maxWatchMin = parseFloat(maxWatchInput.value) || 5.0;
 
         const payload = {
             urls: urls,
             workers: parseInt(workersSlider.value, 10),
             duration_hours: parseFloat(durationSlider.value),
             continuous: true,
-            min_watch: minWatchSec,
-            max_watch: maxWatchSec,
+            min_watch_minutes: minWatchMin,
+            max_watch_minutes: maxWatchMin,
+            min_watch: minWatchMin,
+            max_watch: maxWatchMin,
             min_delay: parseFloat(minDelayInput.value),
             max_delay: parseFloat(maxDelayInput.value),
             headless: toggleHeadless.checked,
