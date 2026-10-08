@@ -89,6 +89,13 @@ class BotOrchestrator:
             finished_at=finished_at,
         )
         self.tracker.record_session(metric)
+        try:
+            from src.web.state import StateManager
+            sm = StateManager.get_instance()
+            if sm.is_running:
+                sm.update_metrics(metric)
+        except Exception:
+            pass
 
     async def _worker_continuous_loop(
         self,
@@ -129,6 +136,17 @@ class BotOrchestrator:
                 logger.info(
                     f"[Worker {worker_id}] ☕ Pausa natural antes do próximo vídeo: {delay_between:.1f}s"
                 )
+                try:
+                    from src.web.state import StateManager
+                    sm = StateManager.get_instance()
+                    if sm.is_running:
+                        sm.update_worker(
+                            worker_id=worker_id,
+                            status="Pausa Natural",
+                            current_watch_time=0.0
+                        )
+                except Exception:
+                    pass
                 await asyncio.sleep(delay_between)
 
     async def run(self) -> None:

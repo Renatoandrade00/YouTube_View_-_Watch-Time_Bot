@@ -183,9 +183,37 @@ async def watch_video(
 
         # Intervalo do polling com pequeno jitter para simular comportamento natural
         sleep_duration = max(1.0, config.poll_interval)
+        try:
+            from src.web.state import StateManager
+            sm = StateManager.get_instance()
+            if sm.is_running:
+                sm.update_worker(
+                    worker_id=worker_id,
+                    status="Assistindo",
+                    current_watch_time=accumulated_watch_time,
+                    target_watch_time=target_watch_seconds,
+                    ads_skipped=stats["ads_skipped"],
+                    continue_clicked=stats["continue_dialogs_clicked"]
+                )
+        except Exception:
+            pass
+
         await asyncio.sleep(sleep_duration)
 
     stats["actual_watch_time"] = round(accumulated_watch_time, 1)
     stats["status"] = "SUCCESS" if accumulated_watch_time >= 25.0 else "FAILED"
     logger.info(f"[Worker {worker_id}] ✅ Sessão concluída! Assistido: {stats['actual_watch_time']}s / Meta: {target_watch_seconds}s")
+    try:
+        from src.web.state import StateManager
+        sm = StateManager.get_instance()
+        if sm.is_running:
+            sm.update_worker(
+                worker_id=worker_id,
+                status="Concluído" if stats["status"] == "SUCCESS" else "Falha",
+                current_watch_time=stats["actual_watch_time"],
+                ads_skipped=stats["ads_skipped"],
+                continue_clicked=stats["continue_dialogs_clicked"]
+            )
+    except Exception:
+        pass
     return stats

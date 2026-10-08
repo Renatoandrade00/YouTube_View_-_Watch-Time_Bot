@@ -60,7 +60,31 @@ Automação em Python com **Playwright** para simulação de visualizações, re
 
 ---
 
-## 💻 Uso Rápido via CLI
+## 🌐 Modo Visual Web (Dashboard no Navegador)
+
+Além da interface de linha de comando, o sistema conta com um **Dashboard Web interativo em tempo real**:
+
+### Como iniciar o painel web:
+- **No Windows (1 Clique):** Dê um duplo clique no arquivo [`iniciar_painel.bat`](file:///d:/Renato/PROJETOS/13%20-%20BOT%20YOUTUBE/iniciar_painel.bat).
+- **Via Terminal:**
+  ```bash
+  python -m src.main --web --port 8000
+  ```
+
+O navegador abrirá automaticamente em `http://localhost:8000`.
+
+### Recursos da Interface Web:
+- **Área de URLs:** Campo para colar múltiplos links do YouTube com contador de vídeos e importação direta de `urls.txt`.
+- **Controles Dinâmicos:** Sliders para número de workers (1 a 20), tempo máximo de execução, watch time e pausas naturais.
+- **Toggles Anti-Detecção:** Ativação/desativação em 1 clique de Anti-Fingerprint, Micro-Interações Humanas, Pular Anúncios, Modo Headless e Mute.
+- **Monitoramento ao Vivo:** Cards de métricas acumuladas (Watch Time total, sessões concluídas, pop-ups superados).
+- **Cards de Workers:** Status de cada instância em tempo real com barra de progresso linear por vídeo.
+- **Console Integrado:** Streaming de logs instantâneo via WebSocket.
+- **Controle Total:** Botões de **Iniciar** e **Parar (Graceful Stop)** sem travamentos.
+
+---
+
+## 💻 Uso via CLI (Terminal Tradicional)
 
 ### 1. Visualização de vídeo único com 2 workers
 ```bash

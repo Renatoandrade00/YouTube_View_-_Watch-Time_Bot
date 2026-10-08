@@ -51,14 +51,31 @@ class PlaywrightWorker:
             )
 
             # Injeção de perfil anti-fingerprint (Canvas, WebGL, AudioContext, Hardware)
+            gpu_desc = "Padrão do Sistema"
             if self.config.enable_anti_fingerprint:
                 profile = generate_fingerprint_profile(self.worker_id)
+                gpu_desc = profile.gpu_vendor
                 stealth_script = build_stealth_injection_script(profile)
                 await context.add_init_script(stealth_script)
                 logger.info(
                     f"[Worker {self.worker_id}] 🛡️ Perfil Anti-Fingerprint ativado "
                     f"(GPU: {profile.gpu_vendor}, Cores: {profile.hardware_concurrency}, RAM: {profile.device_memory}GB)"
                 )
+
+            try:
+                from src.web.state import StateManager
+                sm = StateManager.get_instance()
+                if sm.is_running:
+                    sm.update_worker(
+                        worker_id=self.worker_id,
+                        status="Navegando",
+                        current_url=normalized_url,
+                        current_watch_time=0.0,
+                        target_watch_time=target_watch_time,
+                        gpu_info=gpu_desc
+                    )
+            except Exception:
+                pass
 
             page = await context.new_page()
 

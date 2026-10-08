@@ -97,6 +97,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-delay", type=float, default=None, help="Pausa mínima entre vídeos da lista em segundos (padrão: 5.0)")
     parser.add_argument("--max-delay", type=float, default=None, help="Pausa máxima entre vídeos da lista em segundos (padrão: 15.0)")
 
+    # Argumentos do Modo Visual Web
+    parser.add_argument("--web", "--gui", dest="web_mode", action="store_true", default=False, help="Iniciar painel de controle visual no navegador")
+    parser.add_argument("--port", type=int, default=8000, help="Porta para o servidor web (padrão: 8000)")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host para o servidor web (padrão: 127.0.0.1)")
+    parser.add_argument("--no-browser", action="store_true", default=False, help="Não abrir o navegador automaticamente ao iniciar o modo web")
+
     parser.add_argument("--config", type=str, default="config.yaml", help="Caminho para arquivo YAML de configuração")
     return parser
 
@@ -107,6 +113,27 @@ async def main_async() -> None:
     args = parser.parse_args()
 
     print_legal_disclaimer()
+
+    if args.web_mode:
+        import threading
+        import time
+        import webbrowser
+        import uvicorn
+
+        web_url = f"http://{args.host}:{args.port}"
+        console.print(f"\n[bold green]🌐 Iniciando Painel Visual Web em:[/bold green] [bold cyan]{web_url}[/bold cyan]")
+        console.print("[dim]Pressione CTRL+C no terminal para encerrar o servidor web.[/dim]\n")
+
+        if not args.no_browser:
+            def _open_browser():
+                time.sleep(1.2)
+                webbrowser.open(web_url)
+            threading.Thread(target=_open_browser, daemon=True).start()
+
+        uvicorn_config = uvicorn.Config("src.web.app:app", host=args.host, port=args.port, log_level="warning")
+        server = uvicorn.Server(uvicorn_config)
+        await server.serve()
+        return
 
     cli_overrides = {
         "target_url": args.url,
