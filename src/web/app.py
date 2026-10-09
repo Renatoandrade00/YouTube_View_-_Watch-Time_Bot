@@ -36,6 +36,8 @@ app.add_middleware(
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+logging.getLogger("bot").setLevel(logging.INFO)
+
 state_manager = StateManager.get_instance()
 state_manager.attach_logger()
 
@@ -65,6 +67,7 @@ class StartBotRequest(BaseModel):
     max_watch: Optional[float] = Field(default=None)
     min_delay: float = Field(default=5.0, ge=1.0)
     max_delay: float = Field(default=15.0, ge=1.0)
+    stagger_delay: float = Field(default=15.0, ge=0.0, le=120.0, description="Intervalo entre workers em segundos")
     headless: bool = Field(default=True)
     mute: bool = Field(default=True)
     anti_fingerprint: bool = Field(default=True)
@@ -147,6 +150,7 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
         max_watch=max_watch_sec,
         min_delay_between_videos=req.min_delay,
         max_delay_between_videos=req.max_delay,
+        worker_stagger_delay=req.stagger_delay,
         headless=req.headless,
         mute_audio=req.mute,
         enable_anti_fingerprint=req.anti_fingerprint,
@@ -164,7 +168,7 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
     state_manager.orchestrator = orchestrator
     state_manager.append_log(
         f"🚀 Inicializando Dashboard com {req.workers} workers, "
-        f"{len(cleaned_urls)} vídeos e duração de {req.duration_hours}h."
+        f"{len(cleaned_urls)} vídeos, escalonamento de {req.stagger_delay}s e duração de {req.duration_hours}h."
     )
 
     task = asyncio.create_task(_run_bot_task(config, orchestrator))

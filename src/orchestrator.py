@@ -140,12 +140,51 @@ class BotOrchestrator:
         max_runtime_seconds: Optional[float],
         global_start: float
     ) -> None:
-        """Loop contínuo de um worker: assiste ao vídeo até o watch time máximo, reinicia e continua até atingir a Duração Total da Rodada."""
-        stagger = (worker_id - 1) * 1.5 + random.uniform(0.5, 2.0)
-        try:
-            await asyncio.sleep(stagger)
-        except asyncio.CancelledError:
-            return
+        # Escalonamento gradual (stagger ramp-up) para evitar disparar todas as requisições juntas
+        base_stagger = (worker_id - 1) * getattr(self.config, "worker_stagger_delay", 15.0)
+        stagger = base_stagger + random.uniform(0.5, 2.5) if worker_id > 1 else random.uniform(0.5, 1.5)
+
+        if stagger > 2.0:
+            logger.info(
+                f"[Worker {worker_id}] ⏳ Escalonamento ativo: aguardando {stagger:.1f}s antes de iniciar para evitar disparos simultâneos..."
+            )
+            try:
+                from src.web.state import StateManager
+                sm = StateManager.get_instance()
+                if sm.is_running:
+                    sm.update_worker(
+                        worker_id=worker_id,
+                        status=f"Inicia em {int(round(stagger))}s",
+                        current_watch_time=0.0
+                    )
+            except Exception:
+                pass
+
+            start_wait = time.time()
+            while (time.time() - start_wait) < stagger:
+                if self.stop_event.is_set():
+                    return
+                remaining = int(round(stagger - (time.time() - start_wait)))
+                try:
+                    from src.web.state import StateManager
+                    sm = StateManager.get_instance()
+                    if sm.is_running and remaining > 0:
+                        sm.update_worker(
+                            worker_id=worker_id,
+                            status=f"Inicia em {remaining}s",
+                            current_watch_time=0.0
+                        )
+                except Exception:
+                    pass
+                try:
+                    await asyncio.sleep(min(1.0, max(0.1, stagger - (time.time() - start_wait))))
+                except asyncio.CancelledError:
+                    return
+        else:
+            try:
+                await asyncio.sleep(stagger)
+            except asyncio.CancelledError:
+                return
 
         # Distribui cada worker em um ponto diferente da lista de vídeos
         url_idx = (worker_id - 1) % len(urls)
@@ -259,9 +298,12 @@ class BotOrchestrator:
 
                 async def _task_wrapper(w_id=worker_id, u=target_url, s_id=session_id):
                     async with self.semaphore:
-                        if not self.stop_event.is_set():
-                            stagger = (w_id - 1) * 1.5 + random.uniform(0.5, 2.0)
-                            await asyncio.sleep(stagger)
+                            base_stagger = (w_id - 1) * getattr(self.config, "worker_stagger_delay", 15.0)
+                            stagger = base_stagger + random.uniform(0.5, 2.5) if w_id > 1 else random.uniform(0.5, 1.5)
+                            try:
+                                await asyncio.sleep(stagger)
+                            except asyncio.CancelledError:
+                                return
                             await self._execute_single_session(worker_id=w_id, url=u, session_id=s_id)
 
                 task = asyncio.create_task(_task_wrapper())

@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const maxWatchInput = document.getElementById("max-watch-input");
     const minDelayInput = document.getElementById("min-delay-input");
     const maxDelayInput = document.getElementById("max-delay-input");
+    const staggerDelayInput = document.getElementById("stagger-delay-input");
 
     const toggleAntiFingerprint = document.getElementById("toggle-anti-fingerprint");
     const toggleMicroInteractions = document.getElementById("toggle-micro-interactions");
@@ -154,12 +155,27 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // Determina a classe CSS adequada para o badge de status
+    function getStatusClass(status) {
+        if (!status) return "Aguardando";
+        if (status.includes("Assistindo")) return "Assistindo";
+        if (status.includes("Navegando")) return "Navegando";
+        if (status.includes("Inicia em") || status.includes("Aguardando")) return "Escalonando";
+        if (status.includes("Bloqueio") || status.includes("CAPTCHA")) return "Bloqueado";
+        if (status.includes("Pausa")) return "Pausa";
+        if (status.includes("Reiniciando")) return "Reiniciando";
+        if (status.includes("Finalizado") || status.includes("Concluído")) return "Finalizado";
+        return "Aguardando";
+    }
+
     // Atualização ou Criação de Card de Worker
     function updateWorkerCard(w) {
         if (!w || !w.worker_id) return;
         const wid = w.worker_id;
 
         if (emptyWorkersMsg) emptyWorkersMsg.style.display = "none";
+
+        const statusClass = getStatusClass(w.status);
 
         let card = workerElements.get(wid);
         if (!card) {
@@ -169,7 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
             card.innerHTML = `
                 <div class="worker-top-row">
                     <span class="worker-id-badge">Worker #${wid}</span>
-                    <span class="worker-status-pill ${w.status || 'Aguardando'}">${w.status || 'Aguardando'}</span>
+                    <span class="worker-status-pill ${statusClass}">${w.status || 'Aguardando'}</span>
                 </div>
                 <div class="worker-url" title="${w.current_url || 'Nenhum vídeo'}">
                     ${w.current_url ? `<a href="${w.current_url}" target="_blank">🔗 ${w.current_url.substring(0, 36)}...</a>` : 'Aguardando próximo vídeo...'}
@@ -195,7 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const statusPill = card.querySelector(".worker-status-pill");
             if (statusPill) {
                 statusPill.textContent = w.status || "Aguardando";
-                statusPill.className = `worker-status-pill ${w.status || 'Aguardando'}`;
+                statusPill.className = `worker-status-pill ${statusClass}`;
             }
 
             const urlEl = card.querySelector(".worker-url");
@@ -318,6 +334,7 @@ document.addEventListener("DOMContentLoaded", () => {
             max_watch: maxWatchMin,
             min_delay: parseFloat(minDelayInput.value),
             max_delay: parseFloat(maxDelayInput.value),
+            stagger_delay: parseFloat(staggerDelayInput ? staggerDelayInput.value : 15) || 15.0,
             headless: toggleHeadless.checked,
             mute: toggleMute.checked,
             anti_fingerprint: toggleAntiFingerprint.checked,

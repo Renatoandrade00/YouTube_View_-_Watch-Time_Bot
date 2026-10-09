@@ -33,6 +33,7 @@ venv.bak/
 # Environment Variables
 .env
 .env.local
+config.yaml
 
 # Playwright & Browsers
 .playwright/

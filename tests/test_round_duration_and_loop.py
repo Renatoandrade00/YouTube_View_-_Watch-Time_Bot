@@ -103,6 +103,7 @@ async def test_watch_video_stops_on_max_end_time():
     from src.youtube.player import watch_video
 
     mock_page = AsyncMock()
+    mock_page.url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
     mock_page.goto = AsyncMock()
     mock_page.evaluate = AsyncMock(return_value={"exists": True, "paused": False, "ended": False, "currentTime": 10.0, "duration": 100.0})
 
@@ -126,4 +127,39 @@ async def test_watch_video_stops_on_max_end_time():
     )
 
     assert stats["error_message"] == "Duração Total da Rodada atingida"
+
+
+@pytest.mark.asyncio
+async def test_watch_video_detects_google_sorry_blocked():
+    """Testa se watch_video detecta redirecionamento para google.com/sorry e aborta como BLOCKED."""
+    from src.youtube.player import watch_video
+
+    mock_page = AsyncMock()
+    mock_page.url = "https://www.google.com/sorry/index?continue=https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    mock_page.goto = AsyncMock()
+
+    config = BotConfig(
+        urls_list=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+        workers=1,
+    )
+
+    stats = await watch_video(
+        page=mock_page,
+        url=config.urls_list[0],
+        target_watch_seconds=60,
+        config=config,
+        worker_id=1,
+    )
+
+    assert stats["status"] == "BLOCKED"
+    assert "Bloqueio" in stats["error_message"]
+
+
+def test_config_stagger_delay_default_and_custom():
+    """Testa valor padrão e customizado de worker_stagger_delay."""
+    c1 = BotConfig(urls_list=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"])
+    assert c1.worker_stagger_delay == 15.0
+
+    c2 = BotConfig(urls_list=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"], worker_stagger_delay=30.0)
+    assert c2.worker_stagger_delay == 30.0
 

@@ -96,6 +96,12 @@
                             <input type="number" id="max-delay-input" value="15" min="1" step="1">
                         </div>
                     </div>
+
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label for="stagger-delay-input" title="Intervalo de segurança entre o início de cada worker para não disparar requisições em massa simultâneas">⏳ Intervalo de Inicialização entre Workers (s):</label>
+                        <input type="number" id="stagger-delay-input" value="15" min="0" max="120" step="1" title="Segundos de espera antes de iniciar o próximo worker">
+                        <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 4px;">Escalonamento gradual (ramp-up) para evitar bloqueio de IP/CAPTCHA pelo Google</small>
+                    </div>
                 </div>
 
                 <!-- Stealth & Automation Toggles -->

@@ -98,6 +98,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--min-delay", type=float, default=None, help="Pausa mínima entre vídeos da lista em segundos (padrão: 5.0)")
     parser.add_argument("--max-delay", type=float, default=None, help="Pausa máxima entre vídeos da lista em segundos (padrão: 15.0)")
+    parser.add_argument("--stagger-delay", type=float, default=None, help="Intervalo de escalonamento entre início de cada worker em segundos (padrão: 15.0)")
 
     # Argumentos do Modo Visual Web
     parser.add_argument("--web", "--gui", dest="web_mode", action="store_true", default=False, help="Iniciar painel de controle visual no navegador")
@@ -160,6 +161,7 @@ async def main_async() -> None:
         "enable_micro_interactions": args.enable_micro_interactions,
         "min_delay_between_videos": args.min_delay,
         "max_delay_between_videos": args.max_delay,
+        "worker_stagger_delay": args.stagger_delay,
     }
 
     try:

@@ -564,6 +564,18 @@ input[type="range"] {
     color: var(--text-secondary);
 }
 
+.worker-status-pill.Escalonando {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.worker-status-pill.Bloqueado {
+    background: rgba(239, 68, 68, 0.22);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
 .worker-url {
     font-size: 0.75rem;
     color: var(--text-muted);

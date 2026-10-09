@@ -38,6 +38,7 @@ class BotConfig(BaseModel):
     enable_micro_interactions: bool = Field(default=True, description="Ativar micro-interações humanas (mouse, scroll, hover)")
     min_delay_between_videos: float = Field(default=5.0, ge=1.0, description="Pausa mínima entre vídeos em segundos")
     max_delay_between_videos: float = Field(default=15.0, ge=1.0, description="Pausa máxima entre vídeos em segundos")
+    worker_stagger_delay: float = Field(default=15.0, ge=0.0, description="Tempo de espera (em segundos) entre a inicialização de cada worker consecutivo para evitar sobrecarga de rede e detecção")
 
     @field_validator("max_watch")
     @classmethod
@@ -92,6 +93,8 @@ def load_config(
                     data["max_watch"] = yaml_data["execution"].get("max_watch_seconds", 120)
                     data["headless"] = yaml_data["execution"].get("headless", False)
                     data["mute_audio"] = yaml_data["execution"].get("mute_audio", True)
+                    if "worker_stagger_delay" in yaml_data["execution"]:
+                        data["worker_stagger_delay"] = yaml_data["execution"].get("worker_stagger_delay", 15.0)
                 if "monitoring" in yaml_data:
                     data["poll_interval"] = yaml_data["monitoring"].get("poll_interval_seconds", 5.0)
                     data["skip_ads"] = yaml_data["monitoring"].get("skip_ads", True)
@@ -123,6 +126,7 @@ def load_config(
         "ENABLE_MICRO_INTERACTIONS": ("enable_micro_interactions", lambda v: v.lower() in ("true", "1", "yes")),
         "MIN_DELAY_BETWEEN_VIDEOS": ("min_delay_between_videos", float),
         "MAX_DELAY_BETWEEN_VIDEOS": ("max_delay_between_videos", float),
+        "WORKER_STAGGER_DELAY": ("worker_stagger_delay", float),
     }
 
     for env_var, (field_name, converter) in env_mappings.items():

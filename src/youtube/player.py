@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import random
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError
 
 from src.config import BotConfig
@@ -108,6 +110,31 @@ async def watch_video(
         logger.error(f"[Worker {worker_id}] ❌ Erro ao navegar para o vídeo: {e}")
         return stats
 
+    # Detecta imediatamente redirecionamento para tela de CAPTCHA / bloqueio do Google
+    raw_url = getattr(page, "url", "")
+    page_url_str = raw_url if isinstance(raw_url, str) else str(raw_url)
+    current_url_lower = page_url_str.lower()
+    if "sorry/index" in current_url_lower or "google.com/sorry" in current_url_lower:
+        stats["status"] = "BLOCKED"
+        stats["error_message"] = "Bloqueio temporário do Google (CAPTCHA / Tráfego Incomum detectado)"
+        logger.error(
+            f"[Worker {worker_id}] 🛑 Bloqueio temporário do Google detectado! (URL: {page_url_str[:80]}...). "
+            "A rede/IP foi temporariamente sinalizada por requisições em massa simultâneas. "
+            "Aguarde o esfriamento do IP ou utilize intervalo maior entre workers."
+        )
+        try:
+            from src.web.state import StateManager
+            sm = StateManager.get_instance()
+            if sm.is_running:
+                sm.update_worker(
+                    worker_id=worker_id,
+                    status="Bloqueio/CAPTCHA",
+                    current_watch_time=0.0
+                )
+        except Exception:
+            pass
+        return stats
+
     # Se a rodada já acabou ou foi solicitado stop durante o carregamento
     if stop_event and stop_event.is_set():
         stats["error_message"] = "Interrupção solicitada"
@@ -141,6 +168,26 @@ async def watch_video(
         current_now = time.time()
         elapsed_loop = current_now - last_active_time
         last_active_time = current_now
+
+        # Verifica se houve redirecionamento para tela de bloqueio durante o loop
+        raw_loop_url = getattr(page, "url", "")
+        loop_url = (raw_loop_url if isinstance(raw_loop_url, str) else str(raw_loop_url)).lower()
+        if "sorry/index" in loop_url or "google.com/sorry" in loop_url:
+            stats["status"] = "BLOCKED"
+            stats["error_message"] = "Redirecionado para bloqueio do Google (CAPTCHA / Tráfego Incomum)"
+            logger.error(f"[Worker {worker_id}] 🛑 Redirecionado para tela de bloqueio do Google Sorry.")
+            try:
+                from src.web.state import StateManager
+                sm = StateManager.get_instance()
+                if sm.is_running:
+                    sm.update_worker(
+                        worker_id=worker_id,
+                        status="Bloqueio/CAPTCHA",
+                        current_watch_time=accumulated_watch_time
+                    )
+            except Exception:
+                pass
+            break
 
         # 1. Pular anúncios se configurado
         if config.skip_ads:
@@ -197,8 +244,28 @@ async def watch_video(
                     accumulated_watch_time += elapsed_loop
                     last_video_current_time = video_state.get("currentTime", 0.0)
             else:
-                # Se não encontrou o vídeo ainda, aguarda
-                pass
+                # Se não encontrou o elemento de vídeo após 15s de navegação, verifica se caiu em bloqueio textual
+                if (time.time() - start_time) > 15.0 and accumulated_watch_time == 0:
+                    try:
+                        body_txt = await page.inner_text("body")
+                        if any(term in body_txt.lower() for term in ["tráfego incomum", "unusual traffic", "não é um robô", "not a robot"]):
+                            stats["status"] = "BLOCKED"
+                            stats["error_message"] = "Bloqueio do Google detectado no conteúdo da página"
+                            logger.error(f"[Worker {worker_id}] 🛑 Mensagem de tráfego incomum detectada na página.")
+                            try:
+                                from src.web.state import StateManager
+                                sm = StateManager.get_instance()
+                                if sm.is_running:
+                                    sm.update_worker(
+                                        worker_id=worker_id,
+                                        status="Bloqueio/CAPTCHA",
+                                        current_watch_time=0.0
+                                    )
+                            except Exception:
+                                pass
+                            break
+                    except Exception:
+                        pass
 
         except Exception as e:
             logger.debug(f"[Worker {worker_id}] Exceção na verificação periódica: {e}")
