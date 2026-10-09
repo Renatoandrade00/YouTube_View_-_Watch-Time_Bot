@@ -92,7 +92,7 @@ flowchart TD
 ## 4. Estrutura de Arquivos Proposta
 
 ```text
-d:/Renato/PROJETOS/13 - BOT YOUTUBE/
+YouTube_View_-_Watch-Time_Bot/
 ├── src/
 │   ├── web/                     # NOVO MÓDULO WEB
 │   │   ├── __init__.py

@@ -39,7 +39,8 @@ Automação em Python com **Playwright** para simulação de visualizações, re
 1. **Python 3.10+** instalado.
 2. Clone o repositório ou navegue até o diretório do projeto:
    ```bash
-   cd "x:/xxx/xxx/YOUTUBE VIEW"
+   git clone https://github.com/Renatoandrade00/YouTube_View_-_Watch-Time_Bot.git
+   cd YouTube_View_-_Watch-Time_Bot
    ```
 3. Crie e ative um ambiente virtual (recomendado):
    ```bash
@@ -65,11 +66,11 @@ Automação em Python com **Playwright** para simulação de visualizações, re
 Além da interface de linha de comando, o sistema conta com um **Dashboard Web interativo em tempo real**:
 
 ### Como iniciar o painel web:
-- **No Windows (1 Clique):** Dê um duplo clique no arquivo [`iniciar_painel.bat`](file:///x:/xxx/xxx/YOUTUBE VIEW/iniciar_painel.bat).
+- **No Windows (1 Clique):** Dê um duplo clique no arquivo [`iniciar_painel.bat`](iniciar_painel.bat).
 - **Via Terminal:**
-  ```bash
-  python -m src.main --web --port 8000
-  ```
+   ```bash
+   python -m src.main --web --port 8000
+   ```
 
 O navegador abrirá automaticamente em `http://localhost:8000`.
 
