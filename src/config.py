@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
@@ -53,6 +53,8 @@ class BotConfig(BaseModel):
 
     block_heavy_media: bool = Field(default=True, description="Modo ultra-leve global: bloquear imagens não essenciais, fontes e avatares para reduzir consumo de CPU/RAM e banda")
     auto_player_recovery: bool = Field(default=True, description="Recuperação automática do player em caso de buffering infinito ou travamento de reprodução")
+    search_and_play: bool = Field(default=False, description="Modo Search & Play: pesquisa orgânica no YouTube antes de clicar no vídeo para simular tráfego de busca")
+    custom_keywords: Dict[str, str] = Field(default_factory=dict, description="Mapeamento de URL para palavra-chave customizada de busca")
 
     @field_validator("max_watch")
     @classmethod
@@ -64,20 +66,37 @@ class BotConfig(BaseModel):
 
     def resolve_urls(self) -> List[str]:
         """Retorna lista consolidada de URLs a partir de urls_list, target_url ou urls_file."""
-        urls: List[str] = [u.strip() for u in self.urls_list if u.strip()]
+        from src.youtube.search_flow import parse_url_and_keyword
+
+        urls: List[str] = []
+        for raw in self.urls_list:
+            u_part, kw_part = parse_url_and_keyword(raw)
+            if u_part:
+                if kw_part:
+                    self.custom_keywords[u_part] = kw_part
+                if u_part not in urls:
+                    urls.append(u_part)
 
         if self.target_url:
-            cleaned = self.target_url.strip()
-            if cleaned and cleaned not in urls:
-                urls.append(cleaned)
+            u_part, kw_part = parse_url_and_keyword(self.target_url)
+            if u_part:
+                if kw_part:
+                    self.custom_keywords[u_part] = kw_part
+                if u_part not in urls:
+                    urls.append(u_part)
 
         if self.urls_file:
             path = Path(self.urls_file)
             if path.exists() and path.is_file():
                 for line in path.read_text(encoding="utf-8").splitlines():
                     cleaned = line.strip()
-                    if cleaned and not cleaned.startswith("#") and cleaned not in urls:
-                        urls.append(cleaned)
+                    if cleaned and not cleaned.startswith("#"):
+                        u_part, kw_part = parse_url_and_keyword(cleaned)
+                        if u_part:
+                            if kw_part:
+                                self.custom_keywords[u_part] = kw_part
+                            if u_part not in urls:
+                                urls.append(u_part)
 
         self.urls_list = urls
         return urls

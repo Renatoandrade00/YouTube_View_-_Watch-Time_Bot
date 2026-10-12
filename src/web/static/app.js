@@ -28,6 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const toggleMute = document.getElementById("toggle-mute");
     const toggleBlockMedia = document.getElementById("toggle-block-media");
     const toggleAutoRecovery = document.getElementById("toggle-auto-recovery");
+    const toggleSearchPlay = document.getElementById("toggle-search-play");
 
     // Proxy DOM Elements
     const toggleEnableProxy = document.getElementById("toggle-enable-proxy");
@@ -493,6 +494,7 @@ document.addEventListener("DOMContentLoaded", () => {
             cookies_file: (cookiesFileInput && cookiesFileInput.value.trim()) ? cookiesFileInput.value.trim() : null,
             block_heavy_media: toggleBlockMedia ? toggleBlockMedia.checked : true,
             auto_player_recovery: toggleAutoRecovery ? toggleAutoRecovery.checked : true,
+            search_and_play: toggleSearchPlay ? toggleSearchPlay.checked : false,
         };
 
 

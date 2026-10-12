@@ -83,6 +83,7 @@ class StartBotRequest(BaseModel):
     cookies_file: Optional[str] = Field(default=None)
     block_heavy_media: bool = Field(default=True)
     auto_player_recovery: bool = Field(default=True)
+    search_and_play: bool = Field(default=False)
 
 
 
@@ -169,7 +170,17 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Uma execução já está em andamento!")
 
     from src.youtube.parser import expand_urls_list
-    input_urls = [u.strip() for u in req.urls if u.strip().startswith("http")]
+    from src.youtube.search_flow import parse_url_and_keyword
+
+    custom_keywords_map: Dict[str, str] = {}
+    input_urls: List[str] = []
+    for raw in req.urls:
+        u_part, kw_part = parse_url_and_keyword(raw)
+        if u_part and u_part.startswith("http"):
+            input_urls.append(u_part)
+            if kw_part:
+                custom_keywords_map[u_part] = kw_part
+
     if not input_urls:
         raise HTTPException(status_code=400, detail="Nenhuma URL válida fornecida.")
 
@@ -229,6 +240,8 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
         cookies_file=req.cookies_file,
         block_heavy_media=req.block_heavy_media,
         auto_player_recovery=req.auto_player_recovery,
+        search_and_play=req.search_and_play,
+        custom_keywords=custom_keywords_map,
     )
 
     tracker = MetricsTracker()

@@ -109,7 +109,15 @@ async def watch_video(
     logger.info(f"[Worker {worker_id}] 🎬 Navegando para: {url} (Meta: {target_watch_seconds}s)")
 
     try:
-        await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+        custom_kw = None
+        if hasattr(config, "custom_keywords") and isinstance(config.custom_keywords, dict):
+            custom_kw = config.custom_keywords.get(url)
+
+        if getattr(config, "search_and_play", False):
+            from src.youtube.search_flow import perform_search_and_play
+            await perform_search_and_play(page, url, worker_id, custom_keyword=custom_kw)
+        else:
+            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
     except PlaywrightTimeoutError:
         stats["error_message"] = "Timeout de carregamento da página"
         logger.warning(f"[Worker {worker_id}] ⚠️ Timeout ao carregar a página inicial.")

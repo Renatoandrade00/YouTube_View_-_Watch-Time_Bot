@@ -157,6 +157,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_false",
         help="Desativar recuperação automática do player",
     )
+    parser.add_argument(
+        "--search-and-play",
+        dest="search_and_play",
+        action="store_true",
+        default=None,
+        help="Ativar modo Search & Play: pesquisa orgânica no YouTube antes de reproduzir o vídeo",
+    )
+    parser.add_argument(
+        "--no-search-and-play",
+        dest="search_and_play",
+        action="store_false",
+        help="Desativar modo Search & Play (usar navegação direta)",
+    )
 
     # Argumentos do Modo Visual Web
     parser.add_argument("--web", "--gui", dest="web_mode", action="store_true", default=False, help="Iniciar painel de controle visual no navegador")
@@ -229,6 +242,7 @@ async def main_async() -> None:
         "cookies_file": args.cookies_file,
         "block_heavy_media": args.block_heavy_media,
         "auto_player_recovery": args.auto_player_recovery,
+        "search_and_play": args.search_and_play,
     }
 
     try:

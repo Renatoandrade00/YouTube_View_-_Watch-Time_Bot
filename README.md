@@ -36,7 +36,11 @@ Automação assíncrona em Python com **Playwright** para simulação realista d
   - Recuperação em 3 níveis escalonados:
     - **Nível 1 (~10s parado):** Disparo de evento Play e atalho 'k'.
     - **Nível 2 (~20s parado):** Clique forçado no contêiner do player e avanço de frame (+1s).
-    - **Nível 3 (~30s parado):** Recarregamento limpo da página preservando o tempo já assistido acumulado (`accumulated_watch_time`).
+- **Modo Pesquisa Orgânica ("Search & Play"):**
+  - Em vez de acessar a URL direta (fonte "Direct/Unknown" no Analytics), o worker entra na home do YouTube, digita o título do vídeo ou palavra-chave customizada com cadência de digitação humana e rola os resultados até localizar e clicar no vídeo orgânico.
+  - Registra a fonte de tráfego como **"Pesquisa do YouTube" (YouTube Search)** no YouTube Studio, conferindo máxima autoridade, SEO e retenção indetectável.
+  - Suporte a palavras-chave automáticas (via oEmbed público leve do YouTube) ou personalizadas (`URL | palavra-chave` ou `palavra;URL`).
+  - Fallback transparente e automático para navegação direta caso o vídeo não seja localizado após 4 rolagens.
 - **Anti-Fingerprint Determinístico e Avançado:**
   - Assinaturas WebGL de GPUs reais (NVIDIA RTX, Intel Iris Xe, AMD RX).
   - Micro-ruído imperceptível no Canvas 2D e AudioContext.
@@ -171,6 +175,11 @@ python -m src.main --urls-file urls.txt --workers 4 --proxy --proxies-file proxi
 ### 4. Modo Headless Ultra-Leve (Economia de CPU/RAM com Auto-Recuperação)
 ```bash
 python -m src.main --urls-file urls.txt --workers 5 --headless --block-heavy-media --auto-recovery
+```
+
+### 5. Modo Pesquisa Orgânica ("Search & Play")
+```bash
+python -m src.main --urls-file urls.txt --workers 3 --search-and-play
 ```
 
 ---

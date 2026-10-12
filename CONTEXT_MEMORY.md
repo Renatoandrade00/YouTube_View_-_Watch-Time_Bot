@@ -1,8 +1,8 @@
 # Memória de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de Atualização:** Outubro de 2026  
-> **Versão do Projeto:** 2.3 (Ultra-Light Global + Auto Player Recovery + SQLite + Session Profiles)  
-> **Status dos Testes:** 56/56 testes passando (100% de sucesso)  
+> **Versão do Projeto:** 2.4 (Search & Play Orgânico + Ultra-Light + Auto Player Recovery + SQLite + Session Profiles)  
+> **Status dos Testes:** 63/63 testes passando (100% de sucesso)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
 
 ---
@@ -50,7 +50,8 @@ d:/Projetos/15 - Youtube View Bot/
     │   ├── ads.py                # Detecção e clique automático em 'Pular anúncio'
     │   ├── continue_watching.py  # Detecção e clique no diálogo 'Continuar assistindo'
     │   ├── interactions.py       # Micro-interações humanas (mouse jitter, hover, scroll sutil)
-    │   └── parser.py             # Parser rápido de playlists e canais do YouTube
+    │   ├── parser.py             # Parser rápido de playlists e canais do YouTube
+    │   └── search_flow.py        # Modo Search & Play (busca orgânica, cadência de digitação e clique)
     ├── web/
     │   ├── app.py                # Rotas REST (/api/history, /api/start, etc.) e WebSockets
     │   ├── state.py              # StateManager singleton, buffer de sessões e auto-save SQLite
@@ -217,3 +218,10 @@ flowchart TD
   - Injeção e salvamento dinâmico sem abrir mão do reuso de instâncias de Chromium em execução contínua.
   - Controle integrado via CLI (`--persistent-profiles`, `--cookies-file`) e Web Dashboard (toggle visual com campo de arquivo de cookies).
   - Arquivo modelo de referência `cookies.example.json` adicionado ao projeto e exclusão rígida de credenciais/sessões no `.gitignore`.
+- [x] **Modo Pesquisa Orgânica ("Search & Play") — CONCLUÍDO:**
+  - Em vez de navegação direta (`page.goto`), o worker navega para `https://www.youtube.com`, localiza o campo de busca e digita o título ou termo com cadência humana aleatorizada.
+  - Varre os resultados da busca com rolagem natural de mouse (`mouse.wheel`) até localizar o elemento com o ID do vídeo alvo (`a[href*="{vid}"]`) e clica organicamente nele.
+  - Registra a fonte de visualização no YouTube Studio como **"Pesquisa do YouTube" (YouTube Search)**, multiplicando a autoridade orgânica e reduzindo descartes do algoritmo.
+  - Resolução automática de títulos via endpoint oEmbed público do YouTube com cache em memória, além de suporte a palavras-chave customizadas (`URL | palavra-chave` ou `palavra;URL`).
+  - Fallback transparente e tolerante a falhas para navegação direta caso o vídeo não seja localizado após 4 rolagens.
+  - Controle integrado via CLI (`--search-and-play`), `BotConfig` e toggle no Web Dashboard.
