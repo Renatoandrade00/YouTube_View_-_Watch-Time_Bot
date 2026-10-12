@@ -61,12 +61,16 @@ class StateManager:
         self.orchestrator_task: Optional[asyncio.Task] = None
         self.start_timestamp: Optional[datetime] = None
         self.finish_timestamp: Optional[datetime] = None
+        self.current_urls_count: int = 0
+        self.target_duration_hours: float = 1.0
+        self.completed_sessions: List[Dict[str, Any]] = []
 
         # Métricas agregadas
         self.metrics_summary: Dict[str, Any] = {
             "total_watch_seconds": 0.0,
             "total_sessions": 0,
             "successful_sessions": 0,
+            "blocked_sessions": 0,
             "failed_sessions": 0,
             "total_ads_skipped": 0,
             "total_continue_clicked": 0,
@@ -115,6 +119,25 @@ class StateManager:
             "type": "LOG_ENTRY",
             "data": log_msg
         }))
+
+    def start_run(self, num_workers: int, urls_count: int = 0, target_duration_hours: float = 1.0) -> None:
+        """Inicializa um novo ciclo de rodada resetando métricas e histórico de sessões."""
+        self.init_workers(num_workers)
+        self.is_running = True
+        self.start_timestamp = datetime.now()
+        self.finish_timestamp = None
+        self.current_urls_count = urls_count
+        self.target_duration_hours = target_duration_hours
+        self.completed_sessions = []
+        self.metrics_summary = {
+            "total_watch_seconds": 0.0,
+            "total_sessions": 0,
+            "successful_sessions": 0,
+            "blocked_sessions": 0,
+            "failed_sessions": 0,
+            "total_ads_skipped": 0,
+            "total_continue_clicked": 0,
+        }
 
     def init_workers(self, num_workers: int) -> None:
         self.workers.clear()
@@ -166,15 +189,34 @@ class StateManager:
         }))
 
     def update_metrics(self, session_metric: Any) -> None:
+        status = getattr(session_metric, "status", "FAILED")
         self.metrics_summary["total_sessions"] += 1
-        if getattr(session_metric, "status", "") == "SUCCESS":
+        if status == "SUCCESS":
             self.metrics_summary["successful_sessions"] += 1
+        elif status == "BLOCKED":
+            self.metrics_summary["blocked_sessions"] = self.metrics_summary.get("blocked_sessions", 0) + 1
         else:
             self.metrics_summary["failed_sessions"] += 1
 
         self.metrics_summary["total_watch_seconds"] += getattr(session_metric, "actual_watch_time", 0.0)
         self.metrics_summary["total_ads_skipped"] += getattr(session_metric, "ads_skipped", 0)
         self.metrics_summary["total_continue_clicked"] += getattr(session_metric, "continue_dialogs_clicked", 0)
+
+        # Guarda sessão individual para persistência ao final da rodada
+        s_data = {
+            "session_id": getattr(session_metric, "session_id", None),
+            "worker_id": getattr(session_metric, "worker_id", None),
+            "url": getattr(session_metric, "url", ""),
+            "target_watch_time": getattr(session_metric, "target_watch_time", 0.0),
+            "actual_watch_time": getattr(session_metric, "actual_watch_time", 0.0),
+            "ads_skipped": getattr(session_metric, "ads_skipped", 0),
+            "continue_clicked": getattr(session_metric, "continue_dialogs_clicked", 0),
+            "status": status,
+            "error_message": getattr(session_metric, "error_message", None),
+            "started_at": getattr(session_metric, "started_at", None),
+            "finished_at": getattr(session_metric, "finished_at", None),
+        }
+        self.completed_sessions.append(s_data)
 
         self._safe_create_task(self._broadcast({
             "type": "METRICS_UPDATE",
@@ -196,6 +238,35 @@ class StateManager:
     def finish_run(self, reason: str = "Rodada finalizada.") -> None:
         self.is_running = False
         self.finish_timestamp = datetime.now()
+
+        # Persistência automática no SQLite se houve execução ativa
+        if self.start_timestamp:
+            try:
+                from src.utils.db import DatabaseManager
+                delta_sec = (self.finish_timestamp - self.start_timestamp).total_seconds()
+                reason_lower = reason.lower()
+                run_status = "CANCELLED" if ("cancelad" in reason_lower or "interrompid" in reason_lower) else "COMPLETED"
+                run_data = {
+                    "started_at": self.start_timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    "finished_at": self.finish_timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                    "duration_seconds": round(delta_sec, 1),
+                    "target_watch_time": round(self.target_duration_hours * 3600.0, 1),
+                    "actual_watch_time": round(self.metrics_summary["total_watch_seconds"], 1),
+                    "total_views": self.metrics_summary["total_sessions"],
+                    "successful_views": self.metrics_summary["successful_sessions"],
+                    "blocked_views": self.metrics_summary.get("blocked_sessions", 0),
+                    "failed_views": self.metrics_summary["failed_sessions"],
+                    "ads_skipped": self.metrics_summary["total_ads_skipped"],
+                    "continue_clicked": self.metrics_summary["total_continue_clicked"],
+                    "workers": len(self.workers),
+                    "urls_count": self.current_urls_count,
+                    "status": run_status,
+                    "summary_message": reason,
+                }
+                DatabaseManager.get_instance().save_run(run_data, self.completed_sessions)
+            except Exception as e:
+                logging.getLogger("bot").warning(f"Erro ao persistir histórico no SQLite: {e}")
+
         self.orchestrator = None
         self.orchestrator_task = None
         self.append_log(f"🏁 {reason}")

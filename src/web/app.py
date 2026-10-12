@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from src.config import BotConfig
 from src.orchestrator import BotOrchestrator
+from src.utils.db import DatabaseManager
 from src.utils.logger import MetricsTracker
 from src.web.state import StateManager
 
@@ -224,16 +225,17 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
     tracker = MetricsTracker()
     orchestrator = BotOrchestrator(config=config, tracker=tracker)
 
-    state_manager.init_workers(req.workers)
-    state_manager.is_running = True
-    state_manager.start_timestamp = datetime.now()
+    state_manager.start_run(
+        num_workers=req.workers,
+        urls_count=len(cleaned_urls),
+        target_duration_hours=req.duration_hours or 1.0,
+    )
     state_manager.orchestrator = orchestrator
     proxy_msg = f" com {len(cleaned_proxies)} proxies" if req.enable_proxy else " (sem proxy)"
     state_manager.append_log(
         f"🚀 Inicializando Dashboard com {req.workers} workers, "
         f"{len(cleaned_urls)} vídeos, escalonamento de {req.stagger_delay}s{proxy_msg} e duração de {req.duration_hours}h."
     )
-
 
     task = asyncio.create_task(_run_bot_task(config, orchestrator))
     state_manager.orchestrator_task = task
@@ -262,6 +264,43 @@ async def stop_bot() -> Dict[str, Any]:
     return {"status": "stopping", "message": "Parada solicitada com sucesso."}
 
 
+@app.get("/api/history")
+async def get_history(limit: int = 50, offset: int = 0) -> Dict[str, Any]:
+    """Retorna histórico de rodadas e estatísticas globais persistidas no SQLite."""
+    db = DatabaseManager.get_instance()
+    runs = db.get_all_runs(limit=limit, offset=offset)
+    stats = db.get_run_summary_stats()
+    return {"runs": runs, "stats": stats}
+
+
+@app.get("/api/history/{run_id}")
+async def get_run_history_details(run_id: int) -> Dict[str, Any]:
+    """Retorna dados completos de uma rodada com detalhamento de cada sessão individual de vídeo."""
+    db = DatabaseManager.get_instance()
+    details = db.get_run_details(run_id)
+    if not details:
+        raise HTTPException(status_code=404, detail="Rodada não encontrada.")
+    return details
+
+
+@app.delete("/api/history/{run_id}")
+async def delete_history_run(run_id: int) -> Dict[str, Any]:
+    """Exclui uma rodada do histórico SQLite."""
+    db = DatabaseManager.get_instance()
+    success = db.delete_run(run_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Rodada não encontrada para exclusão.")
+    return {"status": "deleted", "run_id": run_id}
+
+
+@app.delete("/api/history")
+async def clear_all_history() -> Dict[str, Any]:
+    """Limpa todo o histórico de rodadas persistidas."""
+    db = DatabaseManager.get_instance()
+    count = db.clear_history()
+    return {"status": "cleared", "deleted_count": count}
+
+
 @app.websocket("/ws/live")
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await state_manager.register_connection(websocket)
@@ -275,3 +314,4 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         state_manager.remove_connection(websocket)
     except Exception:
         state_manager.remove_connection(websocket)
+

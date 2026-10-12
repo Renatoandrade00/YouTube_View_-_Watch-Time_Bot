@@ -19,6 +19,14 @@
                     <h1>YouTube Watch-Time Bot</h1>
                     <span class="badge-version">v2.0 Visual Hub</span>
                 </div>
+            <div class="nav-tabs">
+                <button type="button" class="tab-btn active" id="tab-live-btn">
+                    <span class="tab-icon">📊</span> Painel ao Vivo
+                </button>
+                <button type="button" class="tab-btn" id="tab-history-btn">
+                    <span class="tab-icon">📜</span> Histórico de Rodadas
+                    <span class="tab-badge" id="history-count-badge">0</span>
+                </button>
             </div>
             <div class="nav-status">
                 <div class="status-indicator">
@@ -32,8 +40,9 @@
             </div>
         </header>
 
-        <!-- Main Layout Grid -->
-        <main class="dashboard-grid">
+        <!-- Live Dashboard Panel -->
+        <div id="view-live" class="view-panel active">
+            <main class="dashboard-grid">
             <!-- Left Column: Controls & Configuration -->
             <section class="config-panel">
                 <div class="panel-header">
@@ -259,11 +268,134 @@
                 </div>
             </section>
         </main>
+        </div> <!-- end view-live -->
+
+        <!-- Historical Runs Panel -->
+        <div id="view-history" class="view-panel" style="display: none;">
+            <div class="history-container">
+                <!-- Summary KPI Cards -->
+                <div class="metrics-grid history-metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-icon">🔄</div>
+                        <div class="metric-info">
+                            <span class="metric-label">Total de Rodadas</span>
+                            <strong class="metric-value" id="hist-total-runs">0</strong>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">⏳</div>
+                        <div class="metric-info">
+                            <span class="metric-label">Watch Time Acumulado</span>
+                            <strong class="metric-value" id="hist-total-hours">0.0h</strong>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">🎬</div>
+                        <div class="metric-info">
+                            <span class="metric-label">Total de Visualizações</span>
+                            <strong class="metric-value" id="hist-total-views">0</strong>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">📈</div>
+                        <div class="metric-info">
+                            <span class="metric-label">Taxa de Sucesso</span>
+                            <strong class="metric-value" id="hist-success-rate">100%</strong>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">🛡️</div>
+                        <div class="metric-info">
+                            <span class="metric-label">Popups / Ads Pulados</span>
+                            <strong class="metric-value" id="hist-ads-skipped">0</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Table Card -->
+                <div class="card glass-card history-card">
+                    <div class="card-title-row">
+                        <div>
+                            <h3>📜 Registro Histórico de Execuções (SQLite)</h3>
+                            <p class="subtitle">Histórico consolidado com métricas, tempos reais e sessões detalhadas</p>
+                        </div>
+                        <div class="history-actions">
+                            <button type="button" class="btn-sm btn-subtle" id="btn-refresh-history">🔄 Atualizar</button>
+                            <button type="button" class="btn-sm btn-danger-subtle" id="btn-clear-history">🗑️ Limpar Histórico</button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="custom-table" id="history-table">
+                            <thead>
+                                <tr>
+                                    <th># ID</th>
+                                    <th>Data / Início</th>
+                                    <th>Duração</th>
+                                    <th>Workers</th>
+                                    <th>Vídeos</th>
+                                    <th>Visualizações</th>
+                                    <th>Watch Time</th>
+                                    <th>Status</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body">
+                                <!-- Preenchido dinamicamente -->
+                            </tbody>
+                        </table>
+                        <div class="empty-state" id="empty-history-msg">
+                            Nenhuma rodada salva no histórico ainda. Finalize uma execução para visualizá-la aqui.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div> <!-- end app-container -->
+
+    <!-- Run Details Modal -->
+    <div id="run-details-modal" class="modal-backdrop" style="display: none;">
+        <div class="modal-dialog glass-card">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <h3 id="modal-run-title">Detalhes da Rodada #1</h3>
+                    <span class="badge-status" id="modal-run-status">COMPLETED</span>
+                </div>
+                <button type="button" class="btn-close" id="btn-close-modal">✕</button>
+            </div>
+            <div class="modal-meta-grid" id="modal-meta-grid">
+                <!-- Metadados da rodada -->
+            </div>
+            <div class="modal-body">
+                <h4 class="sessions-title">🎬 Sessões Individuais de Vídeo</h4>
+                <div class="table-responsive modal-table-wrap">
+                    <table class="custom-table sessions-table">
+                        <thead>
+                            <tr>
+                                <th># Sessão</th>
+                                <th>Worker</th>
+                                <th>URL Alvo</th>
+                                <th>Watch Time</th>
+                                <th>Ads / Popups</th>
+                                <th>Status</th>
+                                <th>Detalhes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modal-sessions-body">
+                            <!-- Preenchido dinamicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="btn-modal-close-footer">Fechar</button>
+            </div>
+        </div>
     </div>
 
     <!-- Notification Toast -->
     <div id="toast-container" class="toast-container"></div>
 
-    <script src="/static/app.js?v=3.0"></script>
+    <script src="/static/app.js?v=4.0"></script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 # Memória de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de Atualização:** Outubro de 2026  
-> **Versão do Projeto:** 2.0 (CLI + Web Hub)  
-> **Status dos Testes:** 40/40 testes passando (100% de sucesso)  
+> **Versão do Projeto:** 2.1 (CLI + Web Hub + SQLite History)  
+> **Status dos Testes:** 45/45 testes passando (100% de sucesso)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
 
 ---
@@ -17,6 +17,7 @@ O **YouTube View & Watch-Time Bot** é um sistema de automação assíncrona bas
 - Operar em múltiplos workers paralelos concorrentes controlados por semáforos assíncronos.
 - Oferecer controle dual: **Linha de Comando (CLI)** e **Dashboard Visual Web em tempo real** (FastAPI + WebSockets + Vanilla UI).
 - Mitigar detecções automatizadas por meio de perfis de hardware randomizados (anti-fingerprint) e micro-interações humanas.
+- Persistir e consultar o histórico consolidado de rodadas e sessões em banco de dados local SQLite.
 
 ---
 
@@ -28,33 +29,38 @@ d:/Projetos/15 - Youtube View Bot/
 ├── urls.txt                  # Lista de vídeos alvo padrão
 ├── iniciar_painel.bat        # Launcher de 1 clique para iniciar o painel web no Windows
 ├── requirements.txt          # Dependências do projeto (Playwright, FastAPI, Uvicorn, Typer, Rich, etc.)
-├── tests/                    # Suíte de testes automatizados com pytest e pytest-asyncio
+├── tests/                    # Suíte de testes automatizados com pytest e pytest-asyncio (45 testes)
 │   ├── test_config.py
 │   ├── test_fingerprint.py
 │   ├── test_helpers.py
 │   ├── test_round_duration_and_loop.py
+│   ├── test_browser_reuse.py
+│   ├── test_youtube_parser.py
+│   ├── test_history_db.py
 │   └── test_web_api.py
 └── src/
     ├── main.py               # Entrypoint principal (CLI + inicialização do servidor Web)
     ├── config.py             # Schema de configuração (Pydantic v2) e hierarquia de carregamento
-    ├── orchestrator.py       # Gestão assíncrona de workers, loops de repetição e duração da rodada
+    ├── orchestrator.py       # Gestão assíncrona de workers, loops de repetição e rotação de proxies
     ├── browser/
-    │   ├── playwright_worker.py  # Ciclo de vida do navegador, isolamento de contexto e execução
+    │   ├── playwright_worker.py  # Processo Chromium persistente, reciclagem de BrowserContext
     │   └── fingerprint.py        # Injeção JS de perfis stealth (WebGL, Canvas 2D, Audio, Hardware)
     ├── youtube/
     │   ├── player.py             # Monitoramento de vídeo, detecção de bloqueio, contagem e replay
     │   ├── ads.py                # Detecção e clique automático em 'Pular anúncio'
     │   ├── continue_watching.py  # Detecção e clique no diálogo 'Continuar assistindo'
-    │   └── interactions.py       # Micro-interações humanas (mouse jitter, hover, scroll sutil)
+    │   ├── interactions.py       # Micro-interações humanas (mouse jitter, hover, scroll sutil)
+    │   └── parser.py             # Parser rápido de playlists e canais do YouTube
     ├── web/
-    │   ├── app.py                # Rotas REST e WebSocket do FastAPI
-    │   ├── state.py              # StateManager singleton, buffer de logs e streaming
+    │   ├── app.py                # Rotas REST (/api/history, /api/start, etc.) e WebSockets
+    │   ├── state.py              # StateManager singleton, buffer de sessões e auto-save SQLite
     │   └── static/
-    │       ├── index.html        # Estrutura do dashboard visual (SPA)
+    │       ├── index.html        # Estrutura do dashboard visual com abas (Painel ao Vivo & Histórico)
     │       ├── styles.css        # Design system moderno escuro (Glassmorphism neon)
-    │       └── app.js            # Lógica reativa, cliente WebSocket e atualização de métricas
+    │       └── app.js            # Lógica reativa, cliente WebSocket e módulo de histórico SQLite
     └── utils/
-        ├── helpers.py            # Normalização de URLs, User-Agents e delays
+        ├── db.py                 # DatabaseManager: CRUD e persistência local SQLite
+        ├── helpers.py            # Normalização de URLs, User-Agents e rotação de proxies
         └── logger.py             # Logging estruturado e rastreamento de métricas (JSONL)
 ```
 
@@ -186,7 +192,12 @@ flowchart TD
   - Motor de extração híbrido em duas camadas: requisição direta ultra-rápida via `httpx` (<1s) com fallback inteligente em Playwright headless.
   - Botão interativo no Dashboard Web ("✨ Extrair Playlist/Canal") que resolve e carrega a lista diretamente na interface com feedback visual de contagem.
   - Expansão automática no orquestrador: URLs mistas na CLI, Web ou `urls.txt` são resolvidas de forma transparente antes do início da rodada.
-- [ ] **Histórico e Persistência de Execuções na Web:**
-  - Salvar resumo de cada rodada em SQLite local (`bot_history.db`) e exibir uma aba de "Histórico de Sessões" com gráficos de desempenho.
+- [x] **Histórico e Persistência de Execuções na Web (SQLite) — CONCLUÍDO:**
+  - Persistência automática em SQLite leve (`DatabaseManager` em `src/utils/db.py`) com tabelas relacionais `runs` e `run_sessions`.
+  - Auto-gravação disparada no encerramento de cada rodada via `StateManager.finish_run()`.
+  - Nova aba interativa "📜 Histórico de Rodadas" no Dashboard Web com KPIs agregados (horas acumuladas, total de rodadas, taxa de sucesso).
+  - Tabela responsiva com detalhamento de rodadas e modal de auditoria por sessão de vídeo individual.
+  - Endpoints REST completos: `GET /api/history`, `GET /api/history/{run_id}`, `DELETE /api/history/{run_id}` e `DELETE /api/history`.
+  - Proteção de privacidade: `bot_history.db` e `*.db` estritamente ignorados no `.gitignore`.
 - [ ] **Suporte a Cookies de Sessão / Perfis Salvos:**
   - Opção para carregar diretórios de perfis do usuário (`user_data_dir`) com contas Google logadas, elevando a confiabilidade das visualizações contabilizadas.

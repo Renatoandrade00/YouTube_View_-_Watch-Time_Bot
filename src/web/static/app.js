@@ -56,6 +56,32 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnClearLogs = document.getElementById("btn-clear-logs");
     const toastContainer = document.getElementById("toast-container");
 
+    // Abas e Histórico DOM Elements
+    const tabLiveBtn = document.getElementById("tab-live-btn");
+    const tabHistoryBtn = document.getElementById("tab-history-btn");
+    const historyCountBadge = document.getElementById("history-count-badge");
+    const viewLive = document.getElementById("view-live");
+    const viewHistory = document.getElementById("view-history");
+
+    const histTotalRuns = document.getElementById("hist-total-runs");
+    const histTotalHours = document.getElementById("hist-total-hours");
+    const histTotalViews = document.getElementById("hist-total-views");
+    const histSuccessRate = document.getElementById("hist-success-rate");
+    const histAdsSkipped = document.getElementById("hist-ads-skipped");
+
+    const btnRefreshHistory = document.getElementById("btn-refresh-history");
+    const btnClearHistory = document.getElementById("btn-clear-history");
+    const historyTableBody = document.getElementById("history-table-body");
+    const emptyHistoryMsg = document.getElementById("empty-history-msg");
+
+    const runDetailsModal = document.getElementById("run-details-modal");
+    const modalRunTitle = document.getElementById("modal-run-title");
+    const modalRunStatus = document.getElementById("modal-run-status");
+    const modalMetaGrid = document.getElementById("modal-meta-grid");
+    const modalSessionsBody = document.getElementById("modal-sessions-body");
+    const btnCloseModal = document.getElementById("btn-close-modal");
+    const btnModalCloseFooter = document.getElementById("btn-modal-close-footer");
+
     let isRunning = false;
     let ws = null;
     let wsReconnectTimer = null;
@@ -243,6 +269,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Atualização de UI conforme estado de execução
     function setRunningState(running) {
+        const wasRunning = isRunning;
         isRunning = running;
         btnStart.disabled = running;
         btnStop.disabled = !running;
@@ -254,6 +281,9 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             botMainBadge.textContent = "Parado";
             botMainBadge.className = "badge-status";
+            if (wasRunning) {
+                setTimeout(loadHistory, 1200);
+            }
         }
     }
 
@@ -500,8 +530,260 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // ==========================================
+    // MÓDULO DE HISTÓRICO & PERSISTÊNCIA (SQLite)
+    // ==========================================
+
+    // Alternância de Abas (Painel ao Vivo vs Histórico)
+    function switchTab(tab) {
+        if (tab === "history") {
+            if (tabHistoryBtn) tabHistoryBtn.classList.add("active");
+            if (tabLiveBtn) tabLiveBtn.classList.remove("active");
+            if (viewLive) viewLive.style.display = "none";
+            if (viewHistory) viewHistory.style.display = "block";
+            loadHistory();
+        } else {
+            if (tabLiveBtn) tabLiveBtn.classList.add("active");
+            if (tabHistoryBtn) tabHistoryBtn.classList.remove("active");
+            if (viewHistory) viewHistory.style.display = "none";
+            if (viewLive) viewLive.style.display = "block";
+        }
+    }
+
+    if (tabLiveBtn) tabLiveBtn.addEventListener("click", () => switchTab("live"));
+    if (tabHistoryBtn) tabHistoryBtn.addEventListener("click", () => switchTab("history"));
+
+    function formatDuration(sec) {
+        if (!sec || sec <= 0) return "0s";
+        const m = Math.floor(sec / 60);
+        const s = Math.round(sec % 60);
+        if (m === 0) return `${s}s`;
+        const h = Math.floor(m / 60);
+        const remM = m % 60;
+        if (h === 0) return `${m}m ${s}s`;
+        return `${h}h ${remM}m`;
+    }
+
+    // Carregar dados de histórico da API SQLite
+    async function loadHistory() {
+        try {
+            const res = await fetch("/api/history");
+            if (!res.ok) throw new Error("Erro ao consultar histórico");
+            const data = await res.json();
+            const runs = data.runs || [];
+            const stats = data.stats || {};
+
+            // Atualiza badge de contagem
+            if (historyCountBadge) historyCountBadge.textContent = runs.length;
+
+            // Atualiza KPI cards
+            if (histTotalRuns) histTotalRuns.textContent = stats.total_runs || 0;
+            if (histTotalHours) histTotalHours.textContent = `${stats.total_watch_hours || 0}h`;
+            if (histTotalViews) histTotalViews.textContent = stats.total_views || 0;
+            if (histSuccessRate) histSuccessRate.textContent = `${stats.success_rate || 100}%`;
+            if (histAdsSkipped) histAdsSkipped.textContent = (stats.total_ads_skipped || 0) + (stats.total_continue_clicked || 0);
+
+            // Renderiza tabela
+            if (!historyTableBody) return;
+            historyTableBody.innerHTML = "";
+
+            if (runs.length === 0) {
+                if (emptyHistoryMsg) emptyHistoryMsg.style.display = "block";
+                return;
+            }
+            if (emptyHistoryMsg) emptyHistoryMsg.style.display = "none";
+
+            runs.forEach(run => {
+                const tr = document.createElement("tr");
+                const statusClass = (run.status || "COMPLETED").toLowerCase();
+                const watchMins = (run.actual_watch_time / 60).toFixed(1);
+                tr.innerHTML = `
+                    <td><strong>#${run.id}</strong></td>
+                    <td>${run.started_at || '—'}</td>
+                    <td>${formatDuration(run.duration_seconds)}</td>
+                    <td>${run.workers}</td>
+                    <td>${run.urls_count} vídeos</td>
+                    <td>${run.successful_views} / ${run.total_views}</td>
+                    <td><strong>${watchMins} min</strong></td>
+                    <td><span class="badge-status ${statusClass}">${run.status}</span></td>
+                    <td>
+                        <div class="table-row-actions">
+                            <button type="button" class="btn-xs btn-subtle btn-details" data-id="${run.id}">🔍 Detalhes</button>
+                            <button type="button" class="btn-xs btn-danger-subtle btn-del-run" data-id="${run.id}" title="Excluir rodada">🗑️</button>
+                        </div>
+                    </td>
+                `;
+                historyTableBody.appendChild(tr);
+            });
+
+            // Adiciona listeners para botões de detalhes e exclusão
+            historyTableBody.querySelectorAll(".btn-details").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const runId = btn.getAttribute("data-id");
+                    openRunDetails(runId);
+                });
+            });
+
+            historyTableBody.querySelectorAll(".btn-del-run").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const runId = btn.getAttribute("data-id");
+                    if (confirm(`Tem certeza que deseja excluir o registro da Rodada #${runId}?`)) {
+                        await deleteRun(runId);
+                    }
+                });
+            });
+
+        } catch (err) {
+            console.error("Erro ao carregar histórico:", err);
+            showToast("Falha ao carregar registros do histórico.", "error");
+        }
+    }
+
+    // Excluir rodada individual
+    async function deleteRun(runId) {
+        try {
+            const res = await fetch(`/api/history/${runId}`, { method: "DELETE" });
+            if (res.ok) {
+                showToast(`Rodada #${runId} excluída com sucesso.`, "info");
+                loadHistory();
+            } else {
+                showToast("Erro ao excluir rodada.", "error");
+            }
+        } catch (err) {
+            showToast("Falha na comunicação ao excluir rodada.", "error");
+        }
+    }
+
+    // Limpar todo o histórico
+    if (btnClearHistory) {
+        btnClearHistory.addEventListener("click", async () => {
+            if (confirm("ATENÇÃO: Deseja realmente excluir TODO o histórico de execuções armazenado? Esta ação não pode ser desfeita.")) {
+                try {
+                    const res = await fetch("/api/history", { method: "DELETE" });
+                    const data = await res.json();
+                    if (res.ok) {
+                        showToast(`Histórico completamente limpo (${data.deleted_count || 0} rodadas removidas).`, "info");
+                        loadHistory();
+                    } else {
+                        showToast("Erro ao limpar histórico.", "error");
+                    }
+                } catch (err) {
+                    showToast("Falha ao comunicar com o servidor.", "error");
+                }
+            }
+        });
+    }
+
+    if (btnRefreshHistory) {
+        btnRefreshHistory.addEventListener("click", () => {
+            loadHistory();
+            showToast("Histórico atualizado.", "info");
+        });
+    }
+
+    // Modal de detalhes da rodada
+    async function openRunDetails(runId) {
+        try {
+            const res = await fetch(`/api/history/${runId}`);
+            if (!res.ok) throw new Error("Rodada não encontrada");
+            const run = await res.json();
+
+            if (modalRunTitle) modalRunTitle.textContent = `Detalhes da Rodada #${run.id}`;
+            const statusClass = (run.status || "COMPLETED").toLowerCase();
+            if (modalRunStatus) {
+                modalRunStatus.textContent = run.status;
+                modalRunStatus.className = `badge-status ${statusClass}`;
+            }
+
+            const watchMins = (run.actual_watch_time / 60).toFixed(1);
+            if (modalMetaGrid) {
+                modalMetaGrid.innerHTML = `
+                    <div class="modal-meta-item">
+                        <span class="label">Início</span>
+                        <span class="value">${run.started_at || '—'}</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span class="label">Término</span>
+                        <span class="value">${run.finished_at || '—'}</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span class="label">Duração Real</span>
+                        <span class="value">${formatDuration(run.duration_seconds)}</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span class="label">Workers</span>
+                        <span class="value">${run.workers}</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span class="label">Vídeos Alvo</span>
+                        <span class="value">${run.urls_count}</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span class="label">Watch Time</span>
+                        <span class="value">${watchMins} min</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span class="label">Sessões OK</span>
+                        <span class="value">${run.successful_views} / ${run.total_views}</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span class="label">Bloqueios / Falhas</span>
+                        <span class="value">${run.blocked_views} / ${run.failed_views}</span>
+                    </div>
+                    <div class="modal-meta-item">
+                        <span class="label">Popups / Ads</span>
+                        <span class="value">${(run.ads_skipped || 0) + (run.continue_clicked || 0)}</span>
+                    </div>
+                `;
+            }
+
+            if (modalSessionsBody) {
+                modalSessionsBody.innerHTML = "";
+                const sessions = run.sessions || [];
+                if (sessions.length === 0) {
+                    modalSessionsBody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">Nenhuma sessão individual registrada nesta rodada.</td></tr>`;
+                } else {
+                    sessions.forEach(s => {
+                        const tr = document.createElement("tr");
+                        const sClass = (s.status || "SUCCESS").toLowerCase();
+                        const sWatch = (s.actual_watch_time || 0).toFixed(1);
+                        const sTarget = (s.target_watch_time || 0).toFixed(0);
+                        tr.innerHTML = `
+                            <td><strong>#${s.session_id || s.id}</strong></td>
+                            <td>Worker ${s.worker_id || 1}</td>
+                            <td class="url-cell" title="${s.url || ''}"><a href="${s.url}" target="_blank" style="color:var(--primary);text-decoration:none;">${s.url || '—'}</a></td>
+                            <td><strong>${sWatch}s</strong> / ${sTarget}s</td>
+                            <td>Ads: ${s.ads_skipped || 0} | Popups: ${s.continue_clicked || 0}</td>
+                            <td><span class="badge-status ${sClass}">${s.status}</span></td>
+                            <td>${s.error_message ? `<span style="color:var(--danger);font-size:0.75rem;" title="${s.error_message}">${s.error_message.substring(0, 35)}...</span>` : '<span style="color:var(--success);">OK</span>'}</td>
+                        `;
+                        modalSessionsBody.appendChild(tr);
+                    });
+                }
+            }
+
+            if (runDetailsModal) runDetailsModal.style.display = "flex";
+        } catch (err) {
+            console.error("Erro ao carregar detalhes:", err);
+            showToast("Falha ao abrir detalhes da rodada.", "error");
+        }
+    }
+
+    function closeModal() {
+        if (runDetailsModal) runDetailsModal.style.display = "none";
+    }
+
+    if (btnCloseModal) btnCloseModal.addEventListener("click", closeModal);
+    if (btnModalCloseFooter) btnModalCloseFooter.addEventListener("click", closeModal);
+    if (runDetailsModal) {
+        runDetailsModal.addEventListener("click", (e) => {
+            if (e.target === runDetailsModal) closeModal();
+        });
+    }
+
     // Inicialização
     loadDefaultUrls();
+    loadHistory();
     connectWebSocket();
 
     // Heartbeat / Atualização de tempo decorrido a cada 1s
@@ -521,3 +803,4 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }, 1000);
 });
+

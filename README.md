@@ -45,8 +45,11 @@ Automação assíncrona em Python com **Playwright** para simulação realista d
   - Detecção contínua e clique no diálogo "Continuar assistindo?".
   - Bypass de banners de consentimento de cookies da Google/YouTube.
   - Pulo automático de anúncios ("Skip Ad").
-- **Dashboard Web em Tempo Real (FastAPI + WebSockets):**
-  - Painel interativo com monitoramento ao vivo, controle de workers, estatísticas acumuladas e console de logs instantâneo.
+- **Histórico e Persistência de Rodadas (SQLite):**
+  - Armazenamento automático e local de cada rodada finalizada (`runs`) e de suas sessões de vídeo individuais (`run_sessions`) em banco SQLite leve (zero dependências externas).
+  - Aba dedicada no Dashboard Web ("📜 Histórico de Rodadas") com KPIs consolidados (total de rodadas, horas acumuladas, taxa de sucesso, popups superados).
+  - Modal interativo com detalhamento de cada sessão executada (watch time real vs alvo, URLs, status e mensagens de erro).
+  - Endpoints REST para consulta paginada, detalhamento, exclusão individual e limpeza de histórico (`/api/history`).
 - **Arquitetura 100% Assíncrona:**
   - Controle rigoroso de concorrência com `asyncio.Semaphore`.
   - Encerramento limpo e gracioso (`Graceful Shutdown`) ao pressionar `Ctrl+C` ou clicar em "Parar".
@@ -125,11 +128,13 @@ O sistema conta com um **Dashboard Web integrado** de alta produtividade:
 O painel será aberto automaticamente no navegador em `http://localhost:8000`.
 
 ### Destaques do Painel:
-* **Entrada Rápida:** Cole URLs diretamente ou importe do arquivo `urls.txt`.
+* **Abas Interativas:** Alterne instantaneamente entre o **Painel ao Vivo** e o **Histórico de Rodadas**.
+* **Entrada Rápida:** Cole URLs diretamente, importe do arquivo `urls.txt` ou extraia playlists/canais com 1 clique.
 * **Configuração em Minutos:** Ajuste de tempo de exibição mínimo e máximo diretamente em minutos.
 * **Seção de Proxy:** Ative o uso de proxies, defina o arquivo da lista e acompanhe o IP mascarado atribuído a cada worker.
 * **Cards de Workers:** Exibição em tempo real do status, vídeo atual, IP ativo e barra de progresso.
 * **Console de Logs:** Streaming de mensagens via WebSocket em tempo real.
+* **Histórico com SQLite:** Registro persistente de rodadas anteriores, KPIs consolidados e modal de inspeção de cada sessão de vídeo.
 
 ---
 
@@ -166,7 +171,7 @@ python -m src.main --urls-file urls.txt --workers 5 --headless
 ├── urls.txt                   # Lista padrão de URLs alvo
 ├── iniciar_painel.bat         # Launcher rápido do painel web para Windows
 ├── requirements.txt           # Dependências do projeto
-├── tests/                     # Suíte de testes unitários e de integração (31 testes)
+├── tests/                     # Suíte de testes unitários e de integração (45 testes)
 └── src/
     ├── main.py                # Ponto de entrada CLI e inicialização do servidor Web
     ├── config.py              # Validação e hierarquia de configurações (Pydantic)
@@ -185,6 +190,7 @@ python -m src.main --urls-file urls.txt --workers 5 --headless
     │   ├── state.py              # StateManager singleton e broadcast em tempo real
     │   └── static/               # Frontend SPA (Vanilla JS + Glassmorphism UI)
     └── utils/
+        ├── db.py                 # Persistência e consultas em SQLite (runs e run_sessions)
         ├── helpers.py            # Rotação de sessão de proxy e mascaramento seguro
         └── logger.py             # Logging estruturado e gravação de métricas JSONL
 ```
@@ -193,7 +199,7 @@ python -m src.main --urls-file urls.txt --workers 5 --headless
 
 ## 🧪 Testes Automatizados
 
-O projeto conta com uma suíte de testes automatizados com cobertura completa para validação de regras de configuração, injeção de fingerprints, rotação de proxies, quarentena, persistência de Chromium e parser de playlists/canais (**40 testes automatizados**):
+O projeto conta com uma suíte de testes automatizados com cobertura completa para validação de regras de configuração, injeção de fingerprints, rotação de proxies, quarentena, persistência de Chromium, parser de playlists/canais e histórico SQLite (**45 testes automatizados**):
 
 ```bash
 pytest
