@@ -1,6 +1,6 @@
 # YouTube View & Watch-Time Bot
 
-Automação em Python com **Playwright** para simulação de visualizações, retenção de watch time e superação automática do diálogo de inatividade ("Continuar assistindo") no YouTube.
+Automação assíncrona em Python com **Playwright** para simulação realista de visualizações, retenção de *watch time*, isolamento avançado de rede via proxies e superação automática do diálogo de inatividade ("Continuar assistindo") no YouTube.
 
 ---
 
@@ -18,31 +18,48 @@ Automação em Python com **Playwright** para simulação de visualizações, re
 
 ---
 
-## 🚀 Funcionalidades (MVP)
+## 🚀 Principais Funcionalidades
 
-- **Perfis Anti-Fingerprint Únicos:** Randomização de assinaturas WebGL (vendor/renderer de GPUs reais), micro-ruído imperceptível no Canvas 2D e AudioContext, além de variação de núcleos de CPU e memória RAM por worker.
-- **Simulação de Micro-Comportamento Humano:** Movimentação natural de cursor (mouse jitter gradual), hover temporário no player de vídeo e rolagem suave de página (scroll sutil).
-- **Modo Contínuo & Rotação Inteligente:** Execução contínua por horas (`--duration-hours`) alternando automaticamente para o próximo vídeo da lista com pausas naturais configuráveis.
-- **Suporte a Vídeo Único ou Lista:** Aceita URL individual via CLI ou arquivo com múltiplas URLs.
-- **Watch Time Dinâmico:** Intervalos configuráveis (`min_watch` e `max_watch`) com randomização por sessão.
-- **Superação de "Continuar Assistindo":** Monitoramento ativo e clique automático no diálogo de pausa por inatividade do player.
-- **Tratamento de Anúncios:** Detecção contínua e clique em botões de "Pular anúncio" / "Skip Ad".
-- **Aceitação de Cookies:** Bypass automático de modais de consentimento do Google/YouTube.
-- **Múltiplos Workers Locais:** Execução paralela assíncrona com controle de concorrência (`asyncio.Semaphore`).
-- **Navegação Isolada:** Cada worker opera em um contexto de navegador independente (cookies limpos, cache separado).
-- **Encerramento Seguro:** Captura de `Ctrl+C` (`SIGINT`) com fechamento garantido de todas as instâncias do navegador.
+- **Gerenciamento Inteligente de Proxies (Pool + Quarentena + Fallback Infinito):**
+  - Suporte a proxies residenciais e rotativos (HTTP/SOCKS5 com autenticação).
+  - **Quarentena Inteligente:** IPs que sofrem bloqueio entram automaticamente em quarentena de 30 minutos para resfriamento de rede.
+  - **Auto-Substituição após 3 Bloqueios:** Detecta sinalizações do Google e rotaciona o IP sem interromper a execução do worker.
+  - **Fallback Dinâmico Infinito:** Gera sessões únicas sob demanda (`sessid.w{worker_id}_{uuid}`) para provedores como DataImpulse, Smartproxy e BrightData, garantindo fornecimento contínuo de IPs sem risco de esgotamento.
+  - **Modo Economia de Banda:** Força qualidade 144p (`tiny`) e bloqueia requisições de anúncios, rastreadores e imagens secundárias, reduzindo o consumo de dados em até 90%.
+- **Anti-Fingerprint Determinístico e Avançado:**
+  - Assinaturas WebGL de GPUs reais (NVIDIA RTX, Intel Iris Xe, AMD RX).
+  - Micro-ruído imperceptível no Canvas 2D e AudioContext.
+  - Variação dinâmica de núcleos de CPU e memória RAM por worker.
+- **Simulação de Micro-Comportamento Humano:**
+  - Movimentação suave de cursor (mouse jitter com interpolação polinomial).
+  - Hover temporário interativo sobre elementos do player.
+  - Rolagem suave de página (scroll natural) e pausas randômicas.
+- **Escalonamento Gradual de Workers (*Stagger Ramp-up*):**
+  - Inicialização espaçada entre instâncias para evitar disparos simultâneos de requisições de rede no mesmo segundo.
+- **Modo Contínuo & Rotação de Vídeos:**
+  - Temporizador global de rodada (`max_runtime_hours` / `--duration-hours`).
+  - Alternância cíclica entre vídeos da lista ou repetição contínua após o término da reprodução.
+- **Superação de Interrupções do Player:**
+  - Detecção contínua e clique no diálogo "Continuar assistindo?".
+  - Bypass de banners de consentimento de cookies da Google/YouTube.
+  - Pulo automático de anúncios ("Skip Ad").
+- **Dashboard Web em Tempo Real (FastAPI + WebSockets):**
+  - Painel interativo com monitoramento ao vivo, controle de workers, estatísticas acumuladas e console de logs instantâneo.
+- **Arquitetura 100% Assíncrona:**
+  - Controle rigoroso de concorrência com `asyncio.Semaphore`.
+  - Encerramento limpo e gracioso (`Graceful Shutdown`) ao pressionar `Ctrl+C` ou clicar em "Parar".
 
 ---
 
 ## 🛠️ Requisitos e Instalação
 
 1. **Python 3.10+** instalado.
-2. Clone o repositório ou navegue até o diretório do projeto:
+2. Clone o repositório:
    ```bash
    git clone https://github.com/Renatoandrade00/YouTube_View_-_Watch-Time_Bot.git
    cd YouTube_View_-_Watch-Time_Bot
    ```
-3. Crie e ative um ambiente virtual (recomendado):
+3. Crie e ative um ambiente virtual:
    ```bash
    python -m venv .venv
    # Windows (PowerShell):
@@ -54,16 +71,47 @@ Automação em Python com **Playwright** para simulação de visualizações, re
    ```bash
    pip install -r requirements.txt
    ```
-5. Instale os navegadores do Playwright (Chromium):
+5. Instale o navegador Chromium do Playwright:
    ```bash
    playwright install chromium
    ```
 
 ---
 
+## ⚙️ Configuração do Ambiente
+
+O projeto suporta configuração via **arquivo YAML**, **variáveis de ambiente (`.env`)** ou **parâmetros CLI**.
+
+### 1. Arquivo de Configuração (`config.yaml`)
+Copie o modelo de exemplo para criar sua configuração local:
+```bash
+cp config.example.yaml config.yaml
+```
+Edite os parâmetros de execução, watch time (em segundos na CLI/YAML), URLs e configurações de proxy.
+
+### 2. Variáveis de Ambiente (`.env`)
+Copie o arquivo de exemplo:
+```bash
+cp env.example .env
+```
+
+### 3. Configuração de Proxies (`proxies.txt`)
+Para utilizar proxies residenciais dedicados ou rotativos:
+1. Copie o arquivo modelo:
+   ```bash
+   cp proxies.example.txt proxies.txt
+   ```
+2. Insira seus proxies (um por linha):
+   ```text
+   http://usuario:senha@gateway.provedor.com:porta
+   ```
+> **Nota de Segurança:** Os arquivos `config.yaml`, `.env` e `proxies.txt` estão incluídos no `.gitignore` para prevenir o vazamento de credenciais.
+
+---
+
 ## 🌐 Modo Visual Web (Dashboard no Navegador)
 
-Além da interface de linha de comando, o sistema conta com um **Dashboard Web interativo em tempo real**:
+O sistema conta com um **Dashboard Web integrado** de alta produtividade:
 
 ### Como iniciar o painel web:
 - **No Windows (1 Clique):** Dê um duplo clique no arquivo [`iniciar_painel.bat`](iniciar_painel.bat).
@@ -72,53 +120,84 @@ Além da interface de linha de comando, o sistema conta com um **Dashboard Web i
    python -m src.main --web --port 8000
    ```
 
-O navegador abrirá automaticamente em `http://localhost:8000`.
+O painel será aberto automaticamente no navegador em `http://localhost:8000`.
 
-### Recursos da Interface Web:
-- **Área de URLs:** Campo para colar múltiplos links do YouTube com contador de vídeos e importação direta de `urls.txt`.
-- **Controles Dinâmicos:** Sliders para número de workers (1 a 20), tempo máximo de execução, watch time e pausas naturais.
-- **Toggles Anti-Detecção:** Ativação/desativação em 1 clique de Anti-Fingerprint, Micro-Interações Humanas, Pular Anúncios, Modo Headless e Mute.
-- **Monitoramento ao Vivo:** Cards de métricas acumuladas (Watch Time total, sessões concluídas, pop-ups superados).
-- **Cards de Workers:** Status de cada instância em tempo real com barra de progresso linear por vídeo.
-- **Console Integrado:** Streaming de logs instantâneo via WebSocket.
-- **Controle Total:** Botões de **Iniciar** e **Parar (Graceful Stop)** sem travamentos.
+### Destaques do Painel:
+* **Entrada Rápida:** Cole URLs diretamente ou importe do arquivo `urls.txt`.
+* **Configuração em Minutos:** Ajuste de tempo de exibição mínimo e máximo diretamente em minutos.
+* **Seção de Proxy:** Ative o uso de proxies, defina o arquivo da lista e acompanhe o IP mascarado atribuído a cada worker.
+* **Cards de Workers:** Exibição em tempo real do status, vídeo atual, IP ativo e barra de progresso.
+* **Console de Logs:** Streaming de mensagens via WebSocket em tempo real.
 
 ---
 
-## 💻 Uso via CLI (Terminal Tradicional)
+## 💻 Uso via CLI (Linha de Comando)
 
-### 1. Visualização de vídeo único com 2 workers
+### 1. Execução rápida com vídeo único
 ```bash
-python -m src.main --url "https://www.youtube.com/watch?v=SEU_VIDEO_ID" --workers 2 --min-watch 45 --max-watch 90
+python -m src.main --url "https://www.youtube.com/watch?v=SEU_VIDEO_ID" --workers 2 --min-watch 45 --max-watch 120
 ```
 
-### 2. Modo Headless (segundo plano)
+### 2. Execução com lista de vídeos e duração da rodada
 ```bash
-python -m src.main --url "https://www.youtube.com/watch?v=SEU_VIDEO_ID" --headless
+python -m src.main --urls-file urls.txt --workers 4 --duration-hours 2.5
 ```
 
-### 3. Usando lista de vídeos
-Crie um arquivo `urls.txt` com uma URL por linha:
+### 3. Execução utilizando lista de proxies
 ```bash
-python -m src.main --urls-file urls.txt --workers 3 --total-views 15
+python -m src.main --urls-file urls.txt --workers 4 --proxy --proxies-file proxies.txt
+```
+
+### 4. Modo Headless (sem interface gráfica visível)
+```bash
+python -m src.main --urls-file urls.txt --workers 5 --headless
 ```
 
 ---
 
-## 📁 Estrutura do Código
+## 📁 Estrutura do Projeto
 
 ```text
-src/
-├── main.py                  # CLI principal e tratamento de encerramento
-├── config.py                # Leitura de variáveis de ambiente, YAML e flags CLI
-├── orchestrator.py          # Pool assíncrono de workers e métricas de execução
-├── browser/
-│   └── playwright_worker.py # Inicialização, isolamento de contextos e fechamento
-├── youtube/
-│   ├── player.py            # Navegação, cookies, play e monitor de reprodução
-│   ├── continue_watching.py # Polling e clique no popup 'Continuar assistindo'
-│   └── ads.py               # Detecção e clique em 'Pular anúncio'
-└── utils/
-    ├── logger.py            # Logs estruturados e resumo de sessões
-    └── helpers.py           # Delays randômicos e rotação de User-Agent
+├── config.example.yaml        # Modelo de configuração do bot
+├── env.example                # Modelo de variáveis de ambiente
+├── proxies.example.txt        # Modelo de lista de proxies
+├── urls.txt                   # Lista padrão de URLs alvo
+├── iniciar_painel.bat         # Launcher rápido do painel web para Windows
+├── requirements.txt           # Dependências do projeto
+├── tests/                     # Suíte de testes unitários e de integração (31 testes)
+└── src/
+    ├── main.py                # Ponto de entrada CLI e inicialização do servidor Web
+    ├── config.py              # Validação e hierarquia de configurações (Pydantic)
+    ├── orchestrator.py        # Orquestrador assíncrono, pool de workers e rotação de proxies
+    ├── browser/
+    │   ├── playwright_worker.py  # Gerenciamento de instâncias e contextos Playwright
+    │   └── fingerprint.py        # Injeção de perfis anti-fingerprint (WebGL, Canvas, Audio)
+    ├── youtube/
+    │   ├── player.py             # Reprodução, monitoramento, detecção de CAPTCHA e 144p
+    │   ├── ads.py                # Detecção e clique em 'Pular anúncio'
+    │   ├── continue_watching.py  # Detecção e clique em 'Continuar assistindo'
+    │   └── interactions.py       # Micro-interações humanas (mouse jitter, hover, scroll)
+    ├── web/
+    │   ├── app.py                # Rotas REST e endpoints WebSocket (FastAPI)
+    │   ├── state.py              # StateManager singleton e broadcast em tempo real
+    │   └── static/               # Frontend SPA (Vanilla JS + Glassmorphism UI)
+    └── utils/
+        ├── helpers.py            # Rotação de sessão de proxy e mascaramento seguro
+        └── logger.py             # Logging estruturado e gravação de métricas JSONL
 ```
+
+---
+
+## 🧪 Testes Automatizados
+
+O projeto conta com uma suíte de testes automatizados com cobertura para validação de regras de configuração, injeção de fingerprints, rotação de proxies, quarentena e APIs do painel web:
+
+```bash
+pytest
+```
+
+---
+
+## 📄 Licença
+
+Distribuído sob a licença MIT. Consulte o arquivo de licença para mais informações.
