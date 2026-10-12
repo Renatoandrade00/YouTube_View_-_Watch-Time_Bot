@@ -42,15 +42,23 @@ async def handle_consent_popups(page: Page) -> bool:
     return False
 
 
-async def ensure_video_playing(page: Page, mute_audio: bool = True) -> bool:
+async def ensure_video_playing(page: Page, mute_audio: bool = True, low_bandwidth: bool = False) -> bool:
     """Garante que o elemento de vídeo HTML5 está em reprodução ativa."""
     try:
-        # Primeiro tenta via injeção JS direta no elemento <video>
+        # Primeiro tenta via injeção JS direta no elemento <video> e configuração de bitrate
         result = await page.evaluate(f"""() => {{
             const video = document.querySelector('video');
             if (!video) return {{ found: false }};
             if ({str(mute_audio).lower()}) {{
                 video.muted = true;
+            }}
+            if ({str(low_bandwidth).lower()}) {{
+                try {{
+                    const mp = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+                    if (mp && mp.setPlaybackQualityRange) {{
+                        mp.setPlaybackQualityRange('tiny', 'tiny');
+                    }}
+                }} catch (e) {{}}
             }}
             if (video.paused) {{
                 video.play().catch(() => {{}});
@@ -74,6 +82,7 @@ async def ensure_video_playing(page: Page, mute_audio: bool = True) -> bool:
         logger.debug(f"Aviso ao verificar status do player: {e}")
 
     return False
+
 
 
 async def watch_video(
@@ -148,7 +157,8 @@ async def watch_video(
     await random_async_sleep(1.0, 2.5)
 
     # Inicia e confere o player
-    await ensure_video_playing(page, mute_audio=config.mute_audio)
+    is_low_bw = getattr(config, "proxy_low_bandwidth_mode", True)
+    await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
 
     start_time = time.time()
     last_active_time = start_time
@@ -198,7 +208,7 @@ async def watch_video(
         if config.auto_continue:
             if await handle_continue_watching_dialog(page):
                 stats["continue_dialogs_clicked"] += 1
-                await ensure_video_playing(page, mute_audio=config.mute_audio)
+                await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
 
         # 3. Inspecionar estado do vídeo no DOM
         try:
@@ -233,12 +243,13 @@ async def watch_video(
                         replay_btn = page.locator("button.ytp-play-button[title*='Repetir'], button.ytp-play-button[title*='Replay'], .ytp-play-button").first
                         if await replay_btn.is_visible(timeout=300):
                             await replay_btn.click(timeout=300, force=True)
-                        await ensure_video_playing(page, mute_audio=config.mute_audio)
+                        await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
                     except Exception as err:
                         logger.debug(f"[Worker {worker_id}] Erro ao reiniciar reprodução do vídeo: {err}")
                 elif video_state.get("paused"):
                     # Se pausado, tenta retomar
-                    await ensure_video_playing(page, mute_audio=config.mute_audio)
+                    await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
+
                 else:
                     # Vídeo tocando ativamente
                     accumulated_watch_time += elapsed_loop

@@ -20,12 +20,14 @@ class WorkerState:
     target_watch_time: float = 0.0
     progress_pct: float = 0.0
     gpu_info: str = "GPU Padrão"
+    proxy_info: str = "Conexão Direta (Local)"
     ads_skipped: int = 0
     continue_clicked: int = 0
     last_update: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
 
 
 class WebSocketLogHandler(logging.Handler):
@@ -127,6 +129,7 @@ class StateManager:
         current_watch_time: Optional[float] = None,
         target_watch_time: Optional[float] = None,
         gpu_info: Optional[str] = None,
+        proxy_info: Optional[str] = None,
         ads_skipped: Optional[int] = None,
         continue_clicked: Optional[int] = None,
     ) -> None:
@@ -144,10 +147,13 @@ class StateManager:
             w.target_watch_time = round(target_watch_time, 1)
         if gpu_info is not None:
             w.gpu_info = gpu_info
+        if proxy_info is not None:
+            w.proxy_info = proxy_info
         if ads_skipped is not None:
             w.ads_skipped = ads_skipped
         if continue_clicked is not None:
             w.continue_clicked = continue_clicked
+
 
         if w.target_watch_time > 0:
             w.progress_pct = min(100.0, round((w.current_watch_time / w.target_watch_time) * 100, 1))

@@ -40,6 +40,13 @@ class BotConfig(BaseModel):
     max_delay_between_videos: float = Field(default=15.0, ge=1.0, description="Pausa máxima entre vídeos em segundos")
     worker_stagger_delay: float = Field(default=15.0, ge=0.0, description="Tempo de espera (em segundos) entre a inicialização de cada worker consecutivo para evitar sobrecarga de rede e detecção")
 
+    enable_proxy: bool = Field(default=False, description="Ativar utilização de proxies para isolamento de IP")
+    proxies_file: Optional[str] = Field(default="proxies.txt", description="Caminho para arquivo com lista de proxies")
+    proxies_list: List[str] = Field(default_factory=list, description="Lista de proxies carregada")
+    proxy_session_template: Optional[str] = Field(default=None, description="Template de sessão para gateway único (ex: http://user-session-{worker_id}:pass@host:port)")
+    proxy_low_bandwidth_mode: bool = Field(default=True, description="Economia de banda: 144p e bloqueio de imagens desnecessárias para poupar tráfego do proxy")
+    proxy_quarantine_minutes: float = Field(default=30.0, ge=1.0, description="Tempo em minutos que um proxy bloqueado permanece em quarentena antes de ser elegível novamente")
+
     @field_validator("max_watch")
     @classmethod
     def validate_watch_range(cls, v: int, info) -> int:
@@ -67,6 +74,35 @@ class BotConfig(BaseModel):
 
         self.urls_list = urls
         return urls
+
+    def resolve_proxies(self) -> List[str]:
+        """Retorna lista consolidada de proxies a partir de proxies_list ou proxies_file."""
+        proxies: List[str] = [p.strip() for p in self.proxies_list if p.strip()]
+
+        if not proxies and self.proxies_file:
+            path = Path(self.proxies_file)
+            if path.exists() and path.is_file():
+                for line in path.read_text(encoding="utf-8").splitlines():
+                    cleaned = line.strip()
+                    if cleaned and not cleaned.startswith("#") and cleaned not in proxies:
+                        proxies.append(cleaned)
+
+        self.proxies_list = proxies
+        return proxies
+
+    def get_proxy_for_worker(self, worker_id: int) -> Optional[str]:
+        """Retorna o proxy designado para um worker (suporta lista ou template com {worker_id})."""
+        if not self.enable_proxy:
+            return None
+
+        if self.proxy_session_template and "{worker_id}" in self.proxy_session_template:
+            return self.proxy_session_template.replace("{worker_id}", str(worker_id))
+
+        proxies = self.resolve_proxies()
+        if not proxies:
+            return None
+
+        return proxies[(worker_id - 1) % len(proxies)]
 
 
 def load_config(
@@ -103,6 +139,13 @@ def load_config(
                     data["log_level"] = yaml_data["logging"].get("level", "INFO")
                     data["save_session_logs"] = yaml_data["logging"].get("save_session_logs", True)
                     data["logs_dir"] = yaml_data["logging"].get("logs_dir", "logs")
+                if "proxy" in yaml_data:
+                    data["enable_proxy"] = yaml_data["proxy"].get("enabled", False)
+                    data["proxies_file"] = yaml_data["proxy"].get("file", "proxies.txt")
+                    data["proxy_low_bandwidth_mode"] = yaml_data["proxy"].get("low_bandwidth_mode", True)
+                    data["proxy_session_template"] = yaml_data["proxy"].get("session_template")
+                    if "quarantine_minutes" in yaml_data["proxy"]:
+                        data["proxy_quarantine_minutes"] = yaml_data["proxy"].get("quarantine_minutes", 30.0)
         except Exception:
             pass
 
@@ -127,6 +170,11 @@ def load_config(
         "MIN_DELAY_BETWEEN_VIDEOS": ("min_delay_between_videos", float),
         "MAX_DELAY_BETWEEN_VIDEOS": ("max_delay_between_videos", float),
         "WORKER_STAGGER_DELAY": ("worker_stagger_delay", float),
+        "ENABLE_PROXY": ("enable_proxy", lambda v: v.lower() in ("true", "1", "yes")),
+        "PROXIES_FILE": ("proxies_file", str),
+        "PROXY_LOW_BANDWIDTH": ("proxy_low_bandwidth_mode", lambda v: v.lower() in ("true", "1", "yes")),
+        "PROXY_SESSION_TEMPLATE": ("proxy_session_template", str),
+        "PROXY_QUARANTINE_MINUTES": ("proxy_quarantine_minutes", float),
     }
 
     for env_var, (field_name, converter) in env_mappings.items():
@@ -145,4 +193,6 @@ def load_config(
 
     config = BotConfig(**data)
     config.resolve_urls()
+    config.resolve_proxies()
     return config
+

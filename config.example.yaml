@@ -26,3 +26,11 @@ logging:
   level: "INFO"
   save_session_logs: true
   logs_dir: "logs"
+
+proxy:
+  enabled: false
+  file: "proxies.txt"
+  low_bandwidth_mode: true
+  session_template: null
+  quarantine_minutes: 30
+

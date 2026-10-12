@@ -1,0 +1,28 @@
+# ==============================================================================
+# YouTube View Bot - Modelo de Lista de Proxies (proxies.example.txt)
+# ==============================================================================
+# Instruções:
+# 1. Copie este arquivo para 'proxies.txt'
+# 2. Insira um proxy por linha no formato suportado:
+#
+# Formato 1 (Recomendado com autenticação):
+#   http://usuario:senha@ip_ou_host:porta
+#
+# Formato 2 (SOCKS5 com ou sem autenticação):
+#   socks5://usuario:senha@ip_ou_host:porta
+#   socks5://ip_ou_host:porta
+#
+# Formato 3 (Proxy sem senha):
+#   http://ip_ou_host:porta
+#   ip_ou_host:porta
+#
+# Formato 4 (Gateway com sessão no usuário - para provedores rotativos):
+#   http://usuario-session-worker1:senha@gateway.provedor.com:7000
+#   http://usuario-session-worker2:senha@gateway.provedor.com:7000
+#
+# ==============================================================================
+
+# Exemplos (Descomente ou substitua pelos seus proxies reais):
+# http://meu_user:minha_senha@192.168.1.100:8000
+# http://meu_user:minha_senha@192.168.1.101:8000
+# socks5://meu_user:minha_senha@proxy.provedor.com:1080

@@ -8,7 +8,13 @@ from playwright.async_api import async_playwright, Playwright, Browser, BrowserC
 
 from src.browser.fingerprint import generate_fingerprint_profile, build_stealth_injection_script
 from src.config import BotConfig
-from src.utils.helpers import get_random_user_agent, get_random_viewport, normalize_youtube_url
+from src.utils.helpers import (
+    format_proxy_display,
+    get_random_user_agent,
+    get_random_viewport,
+    normalize_youtube_url,
+    parse_playwright_proxy,
+)
 from src.youtube.player import watch_video
 
 logger = logging.getLogger("bot")
@@ -17,9 +23,10 @@ logger = logging.getLogger("bot")
 class PlaywrightWorker:
     """Gerencia o ciclo de vida de uma sessão isolada de navegador no Playwright."""
 
-    def __init__(self, worker_id: int, config: BotConfig):
+    def __init__(self, worker_id: int, config: BotConfig, proxy_url: Optional[str] = None):
         self.worker_id = worker_id
         self.config = config
+        self.proxy_url = proxy_url or self.config.get_proxy_for_worker(self.worker_id)
 
     async def execute_session(
         self,
@@ -45,17 +52,74 @@ class PlaywrightWorker:
         if self.config.mute_audio:
             browser_args.append("--mute-audio")
 
+        proxy_dict = parse_playwright_proxy(self.proxy_url) if self.proxy_url else None
+        proxy_desc = format_proxy_display(self.proxy_url) if self.proxy_url else "Conexão Direta (Local)"
+
+        if proxy_dict:
+            logger.info(f"[Worker {self.worker_id}] 🌐 Conectando via Proxy: [cyan]{proxy_desc}[/cyan]")
+
         async with async_playwright() as p:
-            browser: Browser = await p.chromium.launch(
-                headless=self.config.headless,
-                args=browser_args,
-            )
+            launch_kwargs: Dict[str, Any] = {
+                "headless": self.config.headless,
+                "args": browser_args,
+            }
+            if proxy_dict:
+                launch_kwargs["proxy"] = proxy_dict
+
+            browser: Browser = await p.chromium.launch(**launch_kwargs)
 
             context: BrowserContext = await browser.new_context(
                 user_agent=get_random_user_agent(),
                 viewport=get_random_viewport(),
                 locale="pt-BR",
             )
+
+            # Economia de tráfego do proxy: intercepta e bloqueia imagens, fontes, trackers e domínios de anúncios
+            if self.config.proxy_low_bandwidth_mode:
+                # Pré-configura localStorage do YouTube para forçar 144p (tiny) antes mesmo do player carregar
+                await context.add_init_script("""() => {
+                    try {
+                        localStorage.setItem('yt-player-quality', JSON.stringify({
+                            data: '{"quality":144,"previousQuality":144}',
+                            expiration: Date.now() + 86400000000
+                        }));
+                    } catch(e) {}
+                }""")
+
+                BLOCKED_DOMAINS = [
+                    "doubleclick.net",
+                    "googleads",
+                    "googleadservices.com",
+                    "googlesyndication.com",
+                    "adservice.google.com",
+                    "yt3.ggpht.com",
+                    "i.ytimg.com",
+                    "play.google.com/log",
+                ]
+
+                async def _low_bandwidth_filter(route):
+                    try:
+                        req = route.request
+                        url_lower = req.url.lower()
+
+                        # Bloqueia domínios de anúncios, thumbnails pesados e telemetria
+                        if any(domain in url_lower for domain in BLOCKED_DOMAINS) and "videoplayback" not in url_lower:
+                            await route.abort()
+                            return
+
+                        # Bloqueia imagens, fontes e mídias estáticas secundárias
+                        if req.resource_type in ["image", "font", "media"] and "videoplayback" not in url_lower:
+                            await route.abort()
+                            return
+                    except Exception:
+                        pass
+                    try:
+                        await route.continue_()
+                    except Exception:
+                        pass
+
+                await context.route("**/*", _low_bandwidth_filter)
+
 
             # Injeção de perfil anti-fingerprint (Canvas, WebGL, AudioContext, Hardware)
             gpu_desc = "Padrão do Sistema"
@@ -79,12 +143,14 @@ class PlaywrightWorker:
                         current_url=normalized_url,
                         current_watch_time=0.0,
                         target_watch_time=target_watch_time,
-                        gpu_info=gpu_desc
+                        gpu_info=gpu_desc,
+                        proxy_info=proxy_desc,
                     )
             except Exception:
                 pass
 
             page = await context.new_page()
+
 
             try:
                 stats = await watch_video(

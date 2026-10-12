@@ -24,8 +24,18 @@ document.addEventListener("DOMContentLoaded", () => {
     const toggleHeadless = document.getElementById("toggle-headless");
     const toggleMute = document.getElementById("toggle-mute");
 
+    // Proxy DOM Elements
+    const toggleEnableProxy = document.getElementById("toggle-enable-proxy");
+    const proxyDetailsContainer = document.getElementById("proxy-details-container");
+    const proxiesInput = document.getElementById("proxies-input");
+    const proxiesCountBadge = document.getElementById("proxies-count-badge");
+    const btnLoadProxies = document.getElementById("btn-load-proxies");
+    const proxyTemplateInput = document.getElementById("proxy-template-input");
+    const toggleProxyLowBw = document.getElementById("toggle-proxy-low-bw");
+
     const btnStart = document.getElementById("btn-start");
     const btnStop = document.getElementById("btn-stop");
+
 
     const connectionDot = document.getElementById("connection-dot");
     const connectionStatusText = document.getElementById("connection-status-text");
@@ -91,6 +101,52 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     btnLoadDefaults.addEventListener("click", loadDefaultUrls);
+
+    // Controles de Proxy
+    if (toggleEnableProxy) {
+        toggleEnableProxy.addEventListener("change", (e) => {
+            if (proxyDetailsContainer) {
+                proxyDetailsContainer.style.display = e.target.checked ? "block" : "none";
+            }
+        });
+    }
+
+    function updateProxiesCount() {
+        if (!proxiesInput || !proxiesCountBadge) return [];
+        const text = proxiesInput.value.trim();
+        if (!text) {
+            proxiesCountBadge.textContent = "0 proxies";
+            return [];
+        }
+        const lines = text.split("\n")
+            .map(l => l.trim())
+            .filter(l => l.length > 0 && !l.startsWith("#"));
+        proxiesCountBadge.textContent = `${lines.length} prox${lines.length === 1 ? 'y' : 'ies'}`;
+        return lines;
+    }
+
+    if (proxiesInput) {
+        proxiesInput.addEventListener("input", updateProxiesCount);
+    }
+
+    if (btnLoadProxies) {
+        btnLoadProxies.addEventListener("click", async () => {
+            try {
+                const res = await fetch("/api/default-proxies");
+                const data = await res.json();
+                if (data.proxies && data.proxies.length > 0) {
+                    proxiesInput.value = data.proxies.join("\n");
+                    updateProxiesCount();
+                    showToast(`Carregados ${data.proxies.length} proxies de proxies.txt`, "success");
+                } else {
+                    showToast("Arquivo proxies.txt vazio ou não encontrado.", "warn");
+                }
+            } catch (err) {
+                console.error("Falha ao carregar proxies.txt:", err);
+            }
+        });
+    }
+
 
     // Toast Notifications
     function showToast(message, type = "info") {
@@ -201,6 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
                 <div class="worker-footer">
                     <span class="worker-gpu" title="GPU Simulada">🎮 ${w.gpu_info || 'GPU Padrão'}</span>
+                    <span class="worker-proxy" title="${w.proxy_info || 'Conexão Direta'}">🌐 ${w.proxy_info || 'Local'}</span>
                     <span class="worker-ads">🎯 Ads: ${w.ads_skipped || 0}</span>
                 </div>
             `;
@@ -236,7 +293,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const gpuEl = card.querySelector(".worker-gpu");
             if (gpuEl && w.gpu_info) gpuEl.textContent = `🎮 ${w.gpu_info}`;
+
+            const proxyEl = card.querySelector(".worker-proxy");
+            if (proxyEl && w.proxy_info) {
+                proxyEl.textContent = `🌐 ${w.proxy_info}`;
+                proxyEl.title = w.proxy_info;
+            }
         }
+
     }
 
     // Atualização de Métricas Globais
@@ -341,7 +405,12 @@ document.addEventListener("DOMContentLoaded", () => {
             micro_interactions: toggleMicroInteractions.checked,
             skip_ads: toggleSkipAds.checked,
             auto_continue: toggleAutoContinue.checked,
+            enable_proxy: toggleEnableProxy ? toggleEnableProxy.checked : false,
+            proxies: updateProxiesCount(),
+            proxy_session_template: (proxyTemplateInput && proxyTemplateInput.value.trim()) ? proxyTemplateInput.value.trim() : null,
+            proxy_low_bandwidth: toggleProxyLowBw ? toggleProxyLowBw.checked : true,
         };
+
 
         try {
             btnStart.disabled = true;

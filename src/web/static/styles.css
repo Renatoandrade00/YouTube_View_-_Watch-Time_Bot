@@ -621,11 +621,26 @@ input[type="range"] {
 .worker-footer {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 0.7rem;
     color: var(--text-muted);
     border-top: 1px solid rgba(255, 255, 255, 0.05);
     padding-top: 6px;
+    gap: 8px;
 }
+
+.worker-proxy {
+    font-size: 0.68rem;
+    color: var(--primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 130px;
+    background: rgba(0, 242, 254, 0.08);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
 
 /* Terminal Console */
 .terminal-section {

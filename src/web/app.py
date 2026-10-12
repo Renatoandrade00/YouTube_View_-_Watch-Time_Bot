@@ -74,6 +74,10 @@ class StartBotRequest(BaseModel):
     micro_interactions: bool = Field(default=True)
     skip_ads: bool = Field(default=True)
     auto_continue: bool = Field(default=True)
+    enable_proxy: bool = Field(default=False)
+    proxies: List[str] = Field(default_factory=list)
+    proxy_session_template: Optional[str] = Field(default=None)
+    proxy_low_bandwidth: bool = Field(default=True)
 
 
 @app.get("/")
@@ -96,6 +100,20 @@ async def get_default_urls() -> Dict[str, Any]:
     if urls_file.exists():
         loaded_urls = [line.strip() for line in urls_file.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")]
     return {"urls": loaded_urls}
+
+
+@app.get("/api/default-proxies")
+async def get_default_proxies() -> Dict[str, Any]:
+    proxies_file = Path("proxies.txt")
+    loaded_proxies: List[str] = []
+    if proxies_file.exists():
+        loaded_proxies = [
+            line.strip()
+            for line in proxies_file.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+    return {"proxies": loaded_proxies}
+
 
 
 async def _run_bot_task(config: BotConfig, orchestrator: BotOrchestrator) -> None:
@@ -140,6 +158,11 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
     min_watch_sec = max(5, int(round(min_minutes * 60)))
     max_watch_sec = max(min_watch_sec, int(round(max_minutes * 60)))
 
+    cleaned_proxies = [
+        p.strip() for p in req.proxies
+        if p.strip() and not p.strip().startswith("#")
+    ]
+
     config = BotConfig(
         urls_list=cleaned_urls,
         target_url=cleaned_urls[0] if len(cleaned_urls) == 1 else None,
@@ -157,6 +180,10 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
         enable_micro_interactions=req.micro_interactions,
         skip_ads=req.skip_ads,
         auto_continue=req.auto_continue,
+        enable_proxy=req.enable_proxy,
+        proxies_list=cleaned_proxies,
+        proxy_session_template=req.proxy_session_template,
+        proxy_low_bandwidth_mode=req.proxy_low_bandwidth,
     )
 
     tracker = MetricsTracker()
@@ -166,10 +193,12 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
     state_manager.is_running = True
     state_manager.start_timestamp = datetime.now()
     state_manager.orchestrator = orchestrator
+    proxy_msg = f" com {len(cleaned_proxies)} proxies" if req.enable_proxy else " (sem proxy)"
     state_manager.append_log(
         f"🚀 Inicializando Dashboard com {req.workers} workers, "
-        f"{len(cleaned_urls)} vídeos, escalonamento de {req.stagger_delay}s e duração de {req.duration_hours}h."
+        f"{len(cleaned_urls)} vídeos, escalonamento de {req.stagger_delay}s{proxy_msg} e duração de {req.duration_hours}h."
     )
+
 
     task = asyncio.create_task(_run_bot_task(config, orchestrator))
     state_manager.orchestrator_task = task

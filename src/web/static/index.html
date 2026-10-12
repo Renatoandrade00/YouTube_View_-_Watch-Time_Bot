@@ -104,6 +104,43 @@
                     </div>
                 </div>
 
+                <!-- Proxy Configuration Card -->
+                <div class="card glass-card">
+                    <div class="card-title-row">
+                        <h3>🌐 Rede & Proxies</h3>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-enable-proxy">
+                            <span class="slider"></span>
+                            <span class="toggle-label" style="font-weight: 600;">Ativar</span>
+                        </label>
+                    </div>
+                    <div id="proxy-details-container" style="display: none; margin-top: 10px;">
+                        <div class="card-title-row" style="margin-bottom: 6px;">
+                            <span class="hint">1 proxy por linha (http://user:pass@host:port ou host:port):</span>
+                            <div class="urls-actions">
+                                <span class="counter-badge" id="proxies-count-badge">0 proxies</span>
+                                <button type="button" class="btn-sm btn-subtle" id="btn-load-proxies" title="Carregar proxies do proxies.txt">Carregar proxies.txt</button>
+                            </div>
+                        </div>
+                        <textarea id="proxies-input" rows="3" placeholder="http://usuario:senha@proxy1.com:8000&#10;http://usuario:senha@proxy2.com:8000"></textarea>
+                        
+                        <div class="form-group" style="margin-top: 8px;">
+                            <label for="proxy-template-input" style="font-size: 0.8rem;">Gateway Rotativo Único (Opcional):</label>
+                            <input type="text" id="proxy-template-input" placeholder="Ex: http://user-session-{worker_id}:pass@gateway.com:7000" style="font-size: 0.8rem; padding: 6px 10px;">
+                            <small class="hint">{worker_id} será substituído pelo ID de cada instância.</small>
+                        </div>
+
+                        <div style="margin-top: 10px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-proxy-low-bw" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label" style="font-size: 0.85rem;">Economia Máxima de Banda (144p + Bloqueio de Imagens)</span>
+                            </label>
+                            <small class="hint" style="display: block; margin-top: 2px;">Reduz em até 90% o consumo de Gigabytes em proxies pagos.</small>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Stealth & Automation Toggles -->
                 <div class="card glass-card">
                     <h3>🛡️ Proteção Anti-Detecção & Automação</h3>

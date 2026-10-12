@@ -29,9 +29,140 @@ class BotOrchestrator:
         self._global_session_id = 0
         self._monitor_task: Optional[asyncio.Task] = None
         self.max_end_time: Optional[float] = None
+        self.worker_proxies: dict[int, Optional[str]] = {}
+        self.worker_block_counts: dict[int, int] = {}
+        self.worker_proxy_indices: dict[int, int] = {}
+        self.quarantined_proxies: dict[str, float] = {}
+
+    def is_proxy_quarantined(self, proxy_str: Optional[str]) -> bool:
+        """Verifica se o proxy está atualmente em período de quarentena (cooldown por bloqueio)."""
+        if not proxy_str:
+            return False
+        expiry = self.quarantined_proxies.get(proxy_str)
+        if expiry is None:
+            return False
+        if time.time() >= expiry:
+            del self.quarantined_proxies[proxy_str]
+            return False
+        return True
+
+    def quarantine_proxy(self, proxy_str: Optional[str], duration_seconds: Optional[float] = None) -> None:
+        """Coloca um proxy em quarentena temporária para evitar reutilização enquanto o IP estiver sinalizado."""
+        if not proxy_str:
+            return
+        if duration_seconds is None:
+            quarantine_mins = getattr(self.config, "proxy_quarantine_minutes", 30.0)
+            duration_seconds = quarantine_mins * 60.0
+        self.quarantined_proxies[proxy_str] = time.time() + duration_seconds
+        from src.utils.helpers import format_proxy_display
+        logger.warning(
+            f"🔒 Proxy colocado em quarentena por {duration_seconds/60:.1f}min: {format_proxy_display(proxy_str)}"
+        )
+
+    def get_worker_proxy(self, worker_id: int) -> Optional[str]:
+        """Retorna o proxy atualmente ativo atribuído a este worker, garantindo que não esteja em quarentena."""
+        if worker_id not in self.worker_proxies:
+            proxies = self.config.resolve_proxies()
+            if not self.config.enable_proxy or not proxies:
+                self.worker_proxies[worker_id] = self.config.get_proxy_for_worker(worker_id)
+                self.worker_proxy_indices[worker_id] = (worker_id - 1)
+            else:
+                active_proxies = {p for w, p in self.worker_proxies.items() if w != worker_id and p}
+                start_idx = (worker_id - 1) % len(proxies)
+                chosen = None
+                chosen_idx = start_idx
+                for offset in range(len(proxies)):
+                    idx = (start_idx + offset) % len(proxies)
+                    candidate = proxies[idx]
+                    if candidate not in active_proxies and not self.is_proxy_quarantined(candidate):
+                        chosen = candidate
+                        chosen_idx = idx
+                        break
+
+                if chosen is None:
+                    # Todos os proxies da lista estão em uso ou quarentena: gera sessão dinâmica on-the-fly
+                    base_p = proxies[start_idx]
+                    from src.utils.helpers import rotate_proxy_session
+                    chosen = rotate_proxy_session(base_p, worker_id)
+                    chosen_idx = start_idx
+
+                self.worker_proxies[worker_id] = chosen
+                self.worker_proxy_indices[worker_id] = chosen_idx
+
+            self.worker_block_counts[worker_id] = 0
+
+        return self.worker_proxies[worker_id]
+
+    def rotate_worker_proxy(self, worker_id: int) -> Optional[str]:
+        """
+        Substitui automaticamente o proxy/IP do worker após múltiplos bloqueios consecutivos.
+        1. Coloca o proxy/IP atual em quarentena (padrão: 30 minutos).
+        2. Varre a lista (pool de 100+ proxies) procurando o próximo IP livre não quarentenado.
+        3. Caso a lista se esgote ou todos os 100 estejam em quarentena/uso, ativa o fallback dinâmico:
+           gera um token aleatório único de sessão (sessid.w{worker_id}_{uuid}), garantindo um pool infinito
+           de IPs residenciais novos entregues pela DataImpulse sem risco de repetição.
+        """
+        from src.utils.helpers import rotate_proxy_session, format_proxy_display
+
+        current_proxy = self.get_worker_proxy(worker_id)
+        if current_proxy:
+            self.quarantine_proxy(current_proxy)
+
+        proxies = self.config.resolve_proxies()
+        active_proxies = {p for w, p in self.worker_proxies.items() if w != worker_id and p}
+
+        new_proxy = None
+        new_idx = self.worker_proxy_indices.get(worker_id, worker_id - 1)
+
+        if proxies and len(proxies) > 1:
+            curr_idx = self.worker_proxy_indices.get(worker_id, worker_id - 1)
+            for offset in range(1, len(proxies) + 1):
+                cand_idx = (curr_idx + offset) % len(proxies)
+                candidate = proxies[cand_idx]
+                if candidate not in active_proxies and not self.is_proxy_quarantined(candidate):
+                    new_proxy = candidate
+                    new_idx = cand_idx
+                    break
+
+        if not new_proxy:
+            # Fallback dinâmico: gera sessão residencial única on-the-fly (pool infinito)
+            base_proxy = current_proxy or (proxies[0] if proxies else (self.config.get_proxy_for_worker(worker_id) or ""))
+            new_proxy = rotate_proxy_session(base_proxy, worker_id)
+        else:
+            new_proxy = rotate_proxy_session(new_proxy, worker_id)
+
+        self.worker_proxy_indices[worker_id] = new_idx
+        self.worker_proxies[worker_id] = new_proxy
+        self.worker_block_counts[worker_id] = 0
+
+        display_name = format_proxy_display(new_proxy)
+        logger.warning(
+            f"🔄 [Worker {worker_id}] 3 bloqueios consecutivos atingidos! "
+            f"IP substituído automaticamente por novo IP residencial: {display_name}"
+        )
+
+        try:
+            from src.web.state import StateManager
+            sm = StateManager.get_instance()
+            if sm.is_running:
+                sm.update_worker(
+                    worker_id=worker_id,
+                    status="Novo IP Atribuído",
+                    proxy_info=display_name,
+                    current_watch_time=0.0
+                )
+                sm.append_log(
+                    f"🔄 [Worker {worker_id}] 3 bloqueios atingidos! "
+                    f"IP substituído automaticamente por novo IP residencial ({display_name})."
+                )
+        except Exception:
+            pass
+
+        return new_proxy
 
     def stop(self) -> None:
         """Sinaliza para todos os workers pararem a execução imediatamente."""
+
         if not self.stop_event.is_set():
             logger.warning("🛑 Sinal de interrupção recebido. Finalizando tarefas ativas...")
             self.stop_event.set()
@@ -73,10 +204,11 @@ class BotOrchestrator:
             self._global_session_id += 1
             return self._global_session_id
 
-    async def _execute_single_session(self, worker_id: int, url: str, session_id: int) -> None:
+    async def _execute_single_session(self, worker_id: int, url: str, session_id: int) -> dict:
         """Executa uma sessão de visualização individual e registra suas métricas."""
         started_at = datetime.now().isoformat()
-        worker = PlaywrightWorker(worker_id=worker_id, config=self.config)
+        proxy_url = self.get_worker_proxy(worker_id)
+        worker = PlaywrightWorker(worker_id=worker_id, config=self.config, proxy_url=proxy_url)
 
         try:
             stats = await worker.execute_session(
@@ -132,6 +264,9 @@ class BotOrchestrator:
                 sm.update_metrics(metric)
         except Exception:
             pass
+
+        return stats
+
 
     async def _worker_continuous_loop(
         self,
@@ -205,9 +340,48 @@ class BotOrchestrator:
 
             session_id = await self._get_next_session_id()
 
-            await self._execute_single_session(worker_id=worker_id, url=target_url, session_id=session_id)
+            stats = await self._execute_single_session(worker_id=worker_id, url=target_url, session_id=session_id)
+            session_status = stats.get("status", "FAILED") if isinstance(stats, dict) else "FAILED"
 
-            # Após o watch time máximo atingido da sessão:
+            if session_status == "SUCCESS":
+                self.worker_block_counts[worker_id] = 0
+            elif session_status == "BLOCKED":
+                self.worker_block_counts[worker_id] = self.worker_block_counts.get(worker_id, 0) + 1
+                blocks = self.worker_block_counts[worker_id]
+
+                if blocks < 3:
+                    cooloff = random.uniform(6.0, 10.0)
+                    logger.warning(
+                        f"[Worker {worker_id}] ⚠️ IP bloqueado pelo Google ({blocks}/3). "
+                        f"Aguardando cooldown de {cooloff:.1f}s antes de tentar novamente..."
+                    )
+                    try:
+                        from src.web.state import StateManager
+                        sm = StateManager.get_instance()
+                        if sm.is_running:
+                            sm.update_worker(
+                                worker_id=worker_id,
+                                status=f"Bloqueado ({blocks}/3) - Cooldown",
+                                current_watch_time=0.0
+                            )
+                    except Exception:
+                        pass
+                    try:
+                        await asyncio.sleep(cooloff)
+                    except asyncio.CancelledError:
+                        break
+                else:
+                    # 3 bloqueios atingidos! Substitui o IP/proxy automaticamente
+                    self.rotate_worker_proxy(worker_id)
+                    try:
+                        await asyncio.sleep(4.0)
+                    except asyncio.CancelledError:
+                        break
+
+                # Pula a mensagem de "Watch time concluído" e tenta o próximo ciclo com o novo IP
+                continue
+
+            # Após o watch time máximo atingido da sessão bem-sucedida:
             if not self.stop_event.is_set():
                 if max_runtime_seconds is not None:
                     elapsed = time.time() - global_start
@@ -246,6 +420,7 @@ class BotOrchestrator:
                 except asyncio.CancelledError:
                     break
 
+
     async def run(self) -> None:
         """Executa a orquestração dos workers de acordo com as configurações."""
         urls = self.config.resolve_urls()
@@ -263,7 +438,19 @@ class BotOrchestrator:
         logger.info(f"🚀 Iniciando orquestrador com [bold cyan]{self.config.workers}[/bold cyan] workers.")
         logger.info(f"📋 Total de vídeos na lista: [bold yellow]{len(urls)}[/bold yellow] URLs.")
 
+        if self.config.enable_proxy:
+            proxies = self.config.resolve_proxies()
+            if self.config.proxy_session_template:
+                logger.info("🌐 Modo Proxy: Gateway único com isolamento de sessão por worker.")
+            else:
+                logger.info(f"🌐 Modo Proxy: [bold green]{len(proxies)}[/bold green] proxies carregados na rotação.")
+            if self.config.proxy_low_bandwidth_mode:
+                logger.info("💡 Modo Economia de Banda do Proxy ativado (144p + Bloqueio de Imagens/Fontes).")
+        else:
+            logger.info("🌐 Conexão de Rede: Direta / Local (Sem proxy configurado).")
+
         tasks: List[asyncio.Task] = []
+
 
         # Se houver limite de tempo definido, ativa o monitor automático da rodada
         if max_runtime_seconds is not None:
@@ -298,13 +485,18 @@ class BotOrchestrator:
 
                 async def _task_wrapper(w_id=worker_id, u=target_url, s_id=session_id):
                     async with self.semaphore:
-                            base_stagger = (w_id - 1) * getattr(self.config, "worker_stagger_delay", 15.0)
-                            stagger = base_stagger + random.uniform(0.5, 2.5) if w_id > 1 else random.uniform(0.5, 1.5)
-                            try:
-                                await asyncio.sleep(stagger)
-                            except asyncio.CancelledError:
-                                return
-                            await self._execute_single_session(worker_id=w_id, url=u, session_id=s_id)
+                        base_stagger = (w_id - 1) * getattr(self.config, "worker_stagger_delay", 15.0)
+                        stagger = base_stagger + random.uniform(0.5, 2.5) if w_id > 1 else random.uniform(0.5, 1.5)
+                        try:
+                            await asyncio.sleep(stagger)
+                        except asyncio.CancelledError:
+                            return
+                        stats = await self._execute_single_session(worker_id=w_id, url=u, session_id=s_id)
+                        if isinstance(stats, dict) and stats.get("status") == "BLOCKED":
+                            self.worker_block_counts[w_id] = self.worker_block_counts.get(w_id, 0) + 1
+                            if self.worker_block_counts[w_id] >= 3:
+                                self.rotate_worker_proxy(w_id)
+
 
                 task = asyncio.create_task(_task_wrapper())
                 tasks.append(task)

@@ -100,6 +100,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--max-delay", type=float, default=None, help="Pausa máxima entre vídeos da lista em segundos (padrão: 15.0)")
     parser.add_argument("--stagger-delay", type=float, default=None, help="Intervalo de escalonamento entre início de cada worker em segundos (padrão: 15.0)")
 
+    # Argumentos de Proxy
+    parser.add_argument("--proxy", dest="enable_proxy", action="store_true", default=None, help="Ativar uso de proxies para cada worker")
+    parser.add_argument("--no-proxy", dest="enable_proxy", action="store_false", help="Desativar uso de proxies")
+    parser.add_argument("--proxies-file", type=str, default=None, help="Caminho para arquivo com lista de proxies (padrão: proxies.txt)")
+    parser.add_argument(
+        "--proxy-low-bandwidth",
+        dest="proxy_low_bandwidth_mode",
+        action="store_true",
+        default=None,
+        help="Economia de dados: forçar 144p e bloquear imagens para poupar tráfego do proxy",
+    )
+    parser.add_argument(
+        "--no-proxy-low-bandwidth",
+        dest="proxy_low_bandwidth_mode",
+        action="store_false",
+        help="Desativar economia de dados para proxies",
+    )
+    parser.add_argument("--proxy-session-template", type=str, default=None, help="Template de sessão de proxy (ex: http://user-session-{worker_id}:pass@host:port)")
+
     # Argumentos do Modo Visual Web
     parser.add_argument("--web", "--gui", dest="web_mode", action="store_true", default=False, help="Iniciar painel de controle visual no navegador")
     parser.add_argument("--port", type=int, default=8000, help="Porta para o servidor web (padrão: 8000)")
@@ -162,6 +181,10 @@ async def main_async() -> None:
         "min_delay_between_videos": args.min_delay,
         "max_delay_between_videos": args.max_delay,
         "worker_stagger_delay": args.stagger_delay,
+        "enable_proxy": args.enable_proxy,
+        "proxies_file": args.proxies_file,
+        "proxy_low_bandwidth_mode": args.proxy_low_bandwidth_mode,
+        "proxy_session_template": args.proxy_session_template,
     }
 
     try:

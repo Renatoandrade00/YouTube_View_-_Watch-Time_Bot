@@ -54,3 +54,22 @@ def test_bot_config_resolve_urls_from_list():
     resolved = cfg.resolve_urls()
     assert len(resolved) == 2
     assert "https://www.youtube.com/watch?v=TESTE1" in resolved
+
+
+def test_get_default_proxies(client):
+    response = client.get("/api/default-proxies")
+    assert response.status_code == 200
+    data = response.json()
+    assert "proxies" in data
+    assert isinstance(data["proxies"], list)
+
+
+def test_state_manager_worker_proxy_info():
+    sm = StateManager.get_instance()
+    sm.init_workers(1)
+    sm.update_worker(
+        worker_id=1,
+        proxy_info="http://user:***@proxy.com:8000"
+    )
+    assert sm.workers[1].proxy_info == "http://user:***@proxy.com:8000"
+

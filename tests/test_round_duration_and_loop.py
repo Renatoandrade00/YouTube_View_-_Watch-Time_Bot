@@ -163,3 +163,85 @@ def test_config_stagger_delay_default_and_custom():
     c2 = BotConfig(urls_list=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"], worker_stagger_delay=30.0)
     assert c2.worker_stagger_delay == 30.0
 
+
+@pytest.mark.asyncio
+async def test_auto_rotation_on_three_blocks():
+    """Testa se o orquestrador rotaciona o proxy e reseta o contador após 3 bloqueios consecutivos."""
+    config = BotConfig(
+        urls_list=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+        workers=1,
+        enable_proxy=True,
+        proxies_list=["http://user__sessid.worker1:pass@gw.proxy.com:8000"],
+    )
+    tracker = MetricsTracker()
+    orchestrator = BotOrchestrator(config=config, tracker=tracker)
+
+    initial_proxy = orchestrator.get_worker_proxy(1)
+    assert "sessid.worker1" in initial_proxy
+
+    # Simula 3 bloqueios
+    orchestrator.worker_block_counts[1] = 2
+    new_proxy = orchestrator.rotate_worker_proxy(1)
+
+    assert new_proxy != initial_proxy
+    assert "sessid.w1_" in new_proxy
+    assert orchestrator.worker_block_counts[1] == 0
+    assert orchestrator.get_worker_proxy(1) == new_proxy
+
+
+def test_proxy_quarantine_and_pool_selection():
+    """Testa se proxies bloqueados entram em quarentena e são ignorados em favor do próximo IP limpo."""
+    p1 = "http://user__sessid.worker1:pass@gw.proxy.com:8000"
+    p2 = "http://user__sessid.worker2:pass@gw.proxy.com:8000"
+    p3 = "http://user__sessid.worker3:pass@gw.proxy.com:8000"
+
+    config = BotConfig(
+        urls_list=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+        workers=2,
+        enable_proxy=True,
+        proxies_list=[p1, p2, p3],
+        proxy_quarantine_minutes=30.0,
+    )
+    tracker = MetricsTracker()
+    orchestrator = BotOrchestrator(config=config, tracker=tracker)
+
+    # Worker 1 usa p1, Worker 2 usa p2
+    assert orchestrator.get_worker_proxy(1) == p1
+    assert orchestrator.get_worker_proxy(2) == p2
+
+    # Coloca p2 em quarentena manualmente
+    orchestrator.quarantine_proxy(p2, duration_seconds=60.0)
+    assert orchestrator.is_proxy_quarantined(p2) is True
+
+    # Worker 1 sofre rotação: p1 vai para quarentena, p2 está em quarentena, logo deve pular para p3
+    new_w1 = orchestrator.rotate_worker_proxy(1)
+    assert orchestrator.is_proxy_quarantined(p1) is True
+    # Worker 1 recebeu uma nova sessão derivada de p3
+    assert "sessid.w1_" in new_w1
+
+
+def test_proxy_fallback_when_pool_exhausted():
+    """Testa se o orquestrador gera sessões infinitas on-the-fly quando todo o pool estiver em quarentena."""
+    p1 = "http://user__sessid.worker1:pass@gw.proxy.com:8000"
+    p2 = "http://user__sessid.worker2:pass@gw.proxy.com:8000"
+
+    config = BotConfig(
+        urls_list=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+        workers=1,
+        enable_proxy=True,
+        proxies_list=[p1, p2],
+    )
+    tracker = MetricsTracker()
+    orchestrator = BotOrchestrator(config=config, tracker=tracker)
+
+    # Coloca ambos em quarentena
+    orchestrator.quarantine_proxy(p1, duration_seconds=1800.0)
+    orchestrator.quarantine_proxy(p2, duration_seconds=1800.0)
+
+    # Ao rotacionar, mesmo sem proxies livres na lista, não falha e gera sessão dinâmica
+    rotated = orchestrator.rotate_worker_proxy(1)
+    assert rotated is not None
+    assert "sessid.w1_" in rotated
+
+
+

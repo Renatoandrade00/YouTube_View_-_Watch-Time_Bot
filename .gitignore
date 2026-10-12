@@ -30,10 +30,11 @@ ENV/
 env.bak/
 venv.bak/
 
-# Environment Variables
+# Environment Variables & Sensitive Credentials
 .env
 .env.local
 config.yaml
+proxies.txt
 
 # Playwright & Browsers
 .playwright/
