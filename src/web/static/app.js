@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const urlsInput = document.getElementById("urls-input");
     const urlsCountBadge = document.getElementById("urls-count-badge");
     const btnLoadDefaults = document.getElementById("btn-load-defaults");
+    const btnExtractPlaylist = document.getElementById("btn-extract-playlist");
 
     const workersSlider = document.getElementById("workers-slider");
     const workersVal = document.getElementById("workers-val");
@@ -101,6 +102,51 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     btnLoadDefaults.addEventListener("click", loadDefaultUrls);
+
+    // Extrair vídeos de Playlist ou Canal
+    if (btnExtractPlaylist) {
+        btnExtractPlaylist.addEventListener("click", async () => {
+            const rawText = urlsInput.value.trim();
+            if (!rawText) {
+                showToast("Insira ao menos um link de playlist, canal ou vídeo para extrair.", "warning");
+                return;
+            }
+
+            const lines = rawText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+            const originalBtnText = btnExtractPlaylist.textContent;
+            btnExtractPlaylist.disabled = true;
+            btnExtractPlaylist.textContent = "⏳ Extraindo...";
+
+            try {
+                showToast("Buscando e processando vídeos do YouTube...", "info");
+                const res = await fetch("/api/extract-videos", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ urls: lines })
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    showToast(data.detail || "Erro ao extrair vídeos.", "error");
+                    return;
+                }
+
+                if (data.videos && data.videos.length > 0) {
+                    urlsInput.value = data.videos.join("\n");
+                    updateUrlsCount();
+                    showToast(`✨ Sucesso! ${data.count} vídeos carregados na lista.`, "success");
+                } else {
+                    showToast("Nenhum vídeo pôde ser extraído dos links fornecidos.", "warning");
+                }
+            } catch (err) {
+                console.error("Erro na extração:", err);
+                showToast("Falha na comunicação com o servidor ao extrair vídeos.", "error");
+            } finally {
+                btnExtractPlaylist.disabled = false;
+                btnExtractPlaylist.textContent = originalBtnText;
+            }
+        });
+    }
 
     // Controles de Proxy
     if (toggleEnableProxy) {

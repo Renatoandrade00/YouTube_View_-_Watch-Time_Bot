@@ -2,7 +2,7 @@
 
 > **Data de Atualização:** Outubro de 2026  
 > **Versão do Projeto:** 2.0 (CLI + Web Hub)  
-> **Status dos Testes:** 34/34 testes passando (100% de sucesso)  
+> **Status dos Testes:** 40/40 testes passando (100% de sucesso)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
 
 ---
@@ -181,8 +181,11 @@ flowchart TD
   - Possibilidade de abortar o carregamento de fontes personalizadas, imagens de banners e avatares (mantendo apenas o streaming do player de vídeo), economizando largura de banda e CPU.
 
 ### Prioridade 3: Funcionalidades & Automação Avançada
-- [ ] **Parser Automático de Playlists e Canais:**
-  - Permitir colar a URL de um canal ou playlist (`youtube.com/@canal/videos` ou `playlist?list=...`) e extrair automaticamente a lista de vídeos correspondentes.
+- [x] **Parser Automático de Playlists e Canais — CONCLUÍDO:**
+  - Extração automática de todos os vídeos de Playlists (`playlist?list=...`) e Canais (`/@canal/videos` ou `/@canal`).
+  - Motor de extração híbrido em duas camadas: requisição direta ultra-rápida via `httpx` (<1s) com fallback inteligente em Playwright headless.
+  - Botão interativo no Dashboard Web ("✨ Extrair Playlist/Canal") que resolve e carrega a lista diretamente na interface com feedback visual de contagem.
+  - Expansão automática no orquestrador: URLs mistas na CLI, Web ou `urls.txt` são resolvidas de forma transparente antes do início da rodada.
 - [ ] **Histórico e Persistência de Execuções na Web:**
   - Salvar resumo de cada rodada em SQLite local (`bot_history.db`) e exibir uma aba de "Histórico de Sessões" com gráficos de desempenho.
 - [ ] **Suporte a Cookies de Sessão / Perfis Salvos:**

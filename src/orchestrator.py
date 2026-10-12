@@ -454,6 +454,12 @@ class BotOrchestrator:
             logger.error("❌ Nenhuma URL fornecida. Use --url ou configure um arquivo com --urls-file.")
             return
 
+        from src.youtube.parser import expand_urls_list
+        urls = await expand_urls_list(urls)
+        if not urls:
+            logger.error("❌ Nenhum vídeo encontrado após processamento das URLs fornecidas.")
+            return
+
         is_continuous = self.config.continuous or (self.config.max_runtime_hours is not None)
         global_start = time.time()
         max_runtime_seconds = (

@@ -18,8 +18,10 @@ Automação assíncrona em Python com **Playwright** para simulação realista d
 
 ---
 
-## 🚀 Principais Funcionalidades
-
+- **Parser Automático de Playlists e Canais:**
+  - Suporte nativo para links de playlists (`https://www.youtube.com/playlist?list=...`) e abas de vídeos de canais (`https://www.youtube.com/@Canal/videos` ou `/@Canal`).
+  - Extração híbrida em duas camadas (HTTP direto via `httpx` com fallback inteligente em Playwright).
+  - Botão interativo no Dashboard Web ("✨ Extrair Playlist/Canal") que preenche a lista na hora, além de resolução automática na CLI e em arquivos `urls.txt`.
 - **Gerenciamento Inteligente de Proxies (Pool + Quarentena + Fallback Infinito):**
   - Suporte a proxies residenciais e rotativos (HTTP/SOCKS5 com autenticação).
   - **Quarentena Inteligente:** IPs que sofrem bloqueio entram automaticamente em quarentena de 30 minutos para resfriamento de rede.
@@ -176,7 +178,8 @@ python -m src.main --urls-file urls.txt --workers 5 --headless
     │   ├── player.py             # Reprodução, monitoramento, detecção de CAPTCHA e 144p
     │   ├── ads.py                # Detecção e clique em 'Pular anúncio'
     │   ├── continue_watching.py  # Detecção e clique em 'Continuar assistindo'
-    │   └── interactions.py       # Micro-interações humanas (mouse jitter, hover, scroll)
+    │   ├── interactions.py       # Micro-interações humanas (mouse jitter, hover, scroll)
+    │   └── parser.py             # Extração rápida de playlists e canais do YouTube
     ├── web/
     │   ├── app.py                # Rotas REST e endpoints WebSocket (FastAPI)
     │   ├── state.py              # StateManager singleton e broadcast em tempo real
@@ -190,7 +193,7 @@ python -m src.main --urls-file urls.txt --workers 5 --headless
 
 ## 🧪 Testes Automatizados
 
-O projeto conta com uma suíte de testes automatizados com cobertura para validação de regras de configuração, injeção de fingerprints, rotação de proxies, quarentena e APIs do painel web:
+O projeto conta com uma suíte de testes automatizados com cobertura completa para validação de regras de configuração, injeção de fingerprints, rotação de proxies, quarentena, persistência de Chromium e parser de playlists/canais (**40 testes automatizados**):
 
 ```bash
 pytest

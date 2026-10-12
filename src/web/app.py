@@ -127,14 +127,49 @@ async def _run_bot_task(config: BotConfig, orchestrator: BotOrchestrator) -> Non
         state_manager.finish_run("Duração Total da Rodada concluída. Todos os workers foram encerrados.")
 
 
+class ExtractVideosRequest(BaseModel):
+    url: Optional[str] = None
+    urls: Optional[List[str]] = None
+
+
+@app.post("/api/extract-videos")
+async def extract_videos_endpoint(req: ExtractVideosRequest) -> Dict[str, Any]:
+    """Extrai todos os vídeos individuais a partir de links de playlists ou canais."""
+    from src.youtube.parser import expand_urls_list
+
+    candidates: List[str] = []
+    if req.url:
+        candidates.append(req.url.strip())
+    if req.urls:
+        candidates.extend([u.strip() for u in req.urls if u.strip()])
+
+    if not candidates:
+        raise HTTPException(status_code=400, detail="Nenhuma URL fornecida para extração.")
+
+    extracted = await expand_urls_list(candidates)
+    if not extracted:
+        raise HTTPException(status_code=404, detail="Nenhum vídeo pôde ser extraído dos links informados.")
+
+    return {
+        "success": True,
+        "count": len(extracted),
+        "videos": extracted,
+    }
+
+
 @app.post("/api/start")
 async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
     if state_manager.is_running:
         raise HTTPException(status_code=400, detail="Uma execução já está em andamento!")
 
-    cleaned_urls = [u.strip() for u in req.urls if u.strip().startswith("http")]
-    if not cleaned_urls:
+    from src.youtube.parser import expand_urls_list
+    input_urls = [u.strip() for u in req.urls if u.strip().startswith("http")]
+    if not input_urls:
         raise HTTPException(status_code=400, detail="Nenhuma URL válida fornecida.")
+
+    cleaned_urls = await expand_urls_list(input_urls)
+    if not cleaned_urls:
+        raise HTTPException(status_code=400, detail="Nenhum vídeo válido encontrado a partir das URLs fornecidas.")
 
     # O valor na tela é SEMPRE interpretado como MINUTOS
     if req.min_watch_minutes is not None:
