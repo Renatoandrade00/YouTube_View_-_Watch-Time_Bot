@@ -2,7 +2,7 @@
 
 > **Data de Atualização:** Outubro de 2026  
 > **Versão do Projeto:** 2.0 (CLI + Web Hub)  
-> **Status dos Testes:** 31/31 testes passando (100% de sucesso)  
+> **Status dos Testes:** 34/34 testes passando (100% de sucesso)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
 
 ---
@@ -173,8 +173,10 @@ flowchart TD
 
 
 ### Prioridade 2: Otimização de Performance e Consumo de Recursos
-- [ ] **Reuso Eficiente de Instâncias Chromium:**
-  - Compartilhar a instância do navegador entre múltiplos contextos isolados (`browser.new_context()`), reduzindo o consumo de memória RAM em até 60%.
+- [x] **Reuso Eficiente de Instâncias Chromium — CONCLUÍDO:**
+  - Processo `.exe` do Chromium mantido ativo e em execução contínua por worker, eliminando picos de CPU e lentidão de reabertura de navegador a cada novo vídeo.
+  - Criação de `BrowserContext` leve e descartável por sessão (`browser.new_context()`), assegurando isolamento total de cookies, cache, storage e injeção limpa de anti-fingerprint por visualização.
+  - Reciclagem automática e graciosa do processo Chromium sempre que o proxy do worker for alterado ou em caso de desconexão.
 - [ ] **Bloqueio Seletivo de Mídias Pesadas Não Essenciais:**
   - Possibilidade de abortar o carregamento de fontes personalizadas, imagens de banners e avatares (mantendo apenas o streaming do player de vídeo), economizando largura de banda e CPU.
 

@@ -21,12 +21,93 @@ logger = logging.getLogger("bot")
 
 
 class PlaywrightWorker:
-    """Gerencia o ciclo de vida de uma sessão isolada de navegador no Playwright."""
+    """Gerencia o ciclo de vida do Chromium reutilizando o processo do navegador entre sessões."""
 
     def __init__(self, worker_id: int, config: BotConfig, proxy_url: Optional[str] = None):
         self.worker_id = worker_id
         self.config = config
         self.proxy_url = proxy_url or self.config.get_proxy_for_worker(self.worker_id)
+        self._playwright: Optional[Playwright] = None
+        self._browser: Optional[Browser] = None
+        self._lock = asyncio.Lock()
+
+    async def _ensure_browser(self) -> Browser:
+        """
+        Retorna a instância do Chromium ativa, reutilizando-a se já estiver aberta e conectada.
+        Caso contrário, inicializa o driver Playwright e abre o Chromium.
+        """
+        async with self._lock:
+            if self._browser is not None:
+                try:
+                    if self._browser.is_connected():
+                        return self._browser
+                except Exception:
+                    pass
+                # Se perdeu conexão ou encerrou, limpa recursos antes de reiniciar
+                await self._cleanup_browser()
+
+            if self._playwright is None:
+                self._playwright = await async_playwright().start()
+
+            browser_args = [
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-infobars",
+                "--disable-background-timer-throttling",
+                "--disable-backgrounding-occluded-windows",
+                "--disable-renderer-backgrounding",
+                "--autoplay-policy=no-user-gesture-required",
+            ]
+            if self.config.mute_audio:
+                browser_args.append("--mute-audio")
+
+            proxy_dict = parse_playwright_proxy(self.proxy_url) if self.proxy_url else None
+            proxy_desc = format_proxy_display(self.proxy_url) if self.proxy_url else "Conexão Direta (Local)"
+
+            if proxy_dict:
+                logger.info(f"[Worker {self.worker_id}] 🌐 Conectando Chromium via Proxy: [cyan]{proxy_desc}[/cyan]")
+
+            launch_kwargs: Dict[str, Any] = {
+                "headless": self.config.headless,
+                "args": browser_args,
+            }
+            if proxy_dict:
+                launch_kwargs["proxy"] = proxy_dict
+
+            self._browser = await self._playwright.chromium.launch(**launch_kwargs)
+            logger.info(f"[Worker {self.worker_id}] ⚡ Instância Chromium iniciada e ativa para reuso.")
+            return self._browser
+
+    async def update_proxy(self, new_proxy_url: Optional[str]) -> None:
+        """Atualiza o proxy do worker. Se o proxy mudou, reinicia a instância do navegador."""
+        async with self._lock:
+            if self.proxy_url == new_proxy_url:
+                return
+            self.proxy_url = new_proxy_url
+            await self._cleanup_browser()
+
+    async def _cleanup_browser(self) -> None:
+        """Fecha com segurança a instância do navegador sem encerrar o driver Playwright."""
+        if self._browser is not None:
+            try:
+                if self._browser.is_connected():
+                    await self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
+
+    async def close(self) -> None:
+        """Encerra completamente o navegador e o driver Playwright deste worker."""
+        async with self._lock:
+            await self._cleanup_browser()
+            if self._playwright is not None:
+                try:
+                    await self._playwright.stop()
+                except Exception:
+                    pass
+                self._playwright = None
+            logger.debug(f"[Worker {self.worker_id}] Recursos finalizados.")
 
     async def execute_session(
         self,
@@ -35,45 +116,22 @@ class PlaywrightWorker:
         stop_event: Optional[asyncio.Event] = None,
         max_end_time: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Abre uma nova instância de navegador, executa a visualização e fecha todos os recursos."""
+        """
+        Executa uma sessão de visualização criando um BrowserContext leve e isolado,
+        reaproveitando o mesmo processo Chromium já aberto.
+        """
         normalized_url = normalize_youtube_url(url)
         target_watch_time = random.randint(self.config.min_watch, self.config.max_watch)
 
-        browser_args = [
-            "--disable-blink-features=AutomationControlled",
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-infobars",
-            "--disable-background-timer-throttling",
-            "--disable-backgrounding-occluded-windows",
-            "--disable-renderer-backgrounding",
-            "--autoplay-policy=no-user-gesture-required",
-        ]
-        if self.config.mute_audio:
-            browser_args.append("--mute-audio")
+        browser = await self._ensure_browser()
 
-        proxy_dict = parse_playwright_proxy(self.proxy_url) if self.proxy_url else None
-        proxy_desc = format_proxy_display(self.proxy_url) if self.proxy_url else "Conexão Direta (Local)"
+        context: BrowserContext = await browser.new_context(
+            user_agent=get_random_user_agent(),
+            viewport=get_random_viewport(),
+            locale="pt-BR",
+        )
 
-        if proxy_dict:
-            logger.info(f"[Worker {self.worker_id}] 🌐 Conectando via Proxy: [cyan]{proxy_desc}[/cyan]")
-
-        async with async_playwright() as p:
-            launch_kwargs: Dict[str, Any] = {
-                "headless": self.config.headless,
-                "args": browser_args,
-            }
-            if proxy_dict:
-                launch_kwargs["proxy"] = proxy_dict
-
-            browser: Browser = await p.chromium.launch(**launch_kwargs)
-
-            context: BrowserContext = await browser.new_context(
-                user_agent=get_random_user_agent(),
-                viewport=get_random_viewport(),
-                locale="pt-BR",
-            )
-
+        try:
             # Economia de tráfego do proxy: intercepta e bloqueia imagens, fontes, trackers e domínios de anúncios
             if self.config.proxy_low_bandwidth_mode:
                 # Pré-configura localStorage do YouTube para forçar 144p (tiny) antes mesmo do player carregar
@@ -120,7 +178,6 @@ class PlaywrightWorker:
 
                 await context.route("**/*", _low_bandwidth_filter)
 
-
             # Injeção de perfil anti-fingerprint (Canvas, WebGL, AudioContext, Hardware)
             gpu_desc = "Padrão do Sistema"
             if self.config.enable_anti_fingerprint:
@@ -132,6 +189,8 @@ class PlaywrightWorker:
                     f"[Worker {self.worker_id}] 🛡️ Perfil Anti-Fingerprint ativado "
                     f"(GPU: {profile.gpu_vendor}, Cores: {profile.hardware_concurrency}, RAM: {profile.device_memory}GB)"
                 )
+
+            proxy_desc = format_proxy_display(self.proxy_url) if self.proxy_url else "Conexão Direta (Local)"
 
             try:
                 from src.web.state import StateManager
@@ -151,45 +210,36 @@ class PlaywrightWorker:
 
             page = await context.new_page()
 
+            stats = await watch_video(
+                page=page,
+                url=normalized_url,
+                target_watch_seconds=target_watch_time,
+                config=self.config,
+                worker_id=self.worker_id,
+                stop_event=stop_event,
+                max_end_time=max_end_time,
+            )
+            stats["target_watch_time"] = target_watch_time
+            stats["url"] = normalized_url
+            stats["session_id"] = session_id
+            stats["worker_id"] = self.worker_id
+            return stats
 
+        except Exception as e:
+            logger.error(f"[Worker {self.worker_id}] Exceção não tratada na sessão {session_id}: {e}")
+            return {
+                "session_id": session_id,
+                "worker_id": self.worker_id,
+                "url": normalized_url,
+                "target_watch_time": target_watch_time,
+                "actual_watch_time": 0.0,
+                "ads_skipped": 0,
+                "continue_dialogs_clicked": 0,
+                "status": "FAILED",
+                "error_message": str(e),
+            }
+        finally:
             try:
-                stats = await watch_video(
-                    page=page,
-                    url=normalized_url,
-                    target_watch_seconds=target_watch_time,
-                    config=self.config,
-                    worker_id=self.worker_id,
-                    stop_event=stop_event,
-                    max_end_time=max_end_time,
-                )
-                stats["target_watch_time"] = target_watch_time
-                stats["url"] = normalized_url
-                stats["session_id"] = session_id
-                stats["worker_id"] = self.worker_id
-                return stats
-            except Exception as e:
-                logger.error(f"[Worker {self.worker_id}] Exceção não tratada na sessão {session_id}: {e}")
-                return {
-                    "session_id": session_id,
-                    "worker_id": self.worker_id,
-                    "url": normalized_url,
-                    "target_watch_time": target_watch_time,
-                    "actual_watch_time": 0.0,
-                    "ads_skipped": 0,
-                    "continue_dialogs_clicked": 0,
-                    "status": "FAILED",
-                    "error_message": str(e),
-                }
-            finally:
-                try:
-                    await page.close()
-                except Exception:
-                    pass
-                try:
-                    await context.close()
-                except Exception:
-                    pass
-                try:
-                    await browser.close()
-                except Exception:
-                    pass
+                await context.close()
+            except Exception:
+                pass

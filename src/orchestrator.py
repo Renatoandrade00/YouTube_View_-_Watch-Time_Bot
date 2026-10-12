@@ -33,6 +33,18 @@ class BotOrchestrator:
         self.worker_block_counts: dict[int, int] = {}
         self.worker_proxy_indices: dict[int, int] = {}
         self.quarantined_proxies: dict[str, float] = {}
+        self.workers: dict[int, PlaywrightWorker] = {}
+
+    def get_or_create_worker(self, worker_id: int) -> PlaywrightWorker:
+        """Retorna o worker existente ou cria uma nova instância para reuso contínuo."""
+        if worker_id not in self.workers:
+            proxy_url = self.get_worker_proxy(worker_id)
+            self.workers[worker_id] = PlaywrightWorker(
+                worker_id=worker_id,
+                config=self.config,
+                proxy_url=proxy_url
+            )
+        return self.workers[worker_id]
 
     def is_proxy_quarantined(self, proxy_str: Optional[str]) -> bool:
         """Verifica se o proxy está atualmente em período de quarentena (cooldown por bloqueio)."""
@@ -171,6 +183,13 @@ class BotOrchestrator:
         for task in self.active_tasks:
             if not task.done():
                 task.cancel()
+        for worker in list(self.workers.values()):
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(worker.close())
+            except Exception:
+                pass
 
     async def _round_duration_monitor(self, max_seconds: float) -> None:
         """Monitora o tempo total da rodada. Quando atingir a duração máxima, encerra todos os workers."""
@@ -207,8 +226,10 @@ class BotOrchestrator:
     async def _execute_single_session(self, worker_id: int, url: str, session_id: int) -> dict:
         """Executa uma sessão de visualização individual e registra suas métricas."""
         started_at = datetime.now().isoformat()
-        proxy_url = self.get_worker_proxy(worker_id)
-        worker = PlaywrightWorker(worker_id=worker_id, config=self.config, proxy_url=proxy_url)
+        worker = self.get_or_create_worker(worker_id)
+        current_proxy = self.get_worker_proxy(worker_id)
+        if worker.proxy_url != current_proxy:
+            await worker.update_proxy(current_proxy)
 
         try:
             stats = await worker.execute_session(
@@ -324,65 +345,8 @@ class BotOrchestrator:
         # Distribui cada worker em um ponto diferente da lista de vídeos
         url_idx = (worker_id - 1) % len(urls)
 
-        while not self.stop_event.is_set():
-            if max_runtime_seconds is not None:
-                elapsed = time.time() - global_start
-                if elapsed >= max_runtime_seconds:
-                    logger.info(
-                        f"[Worker {worker_id}] ⏳ Duração Total da Rodada atingida ({elapsed / 3600:.2f}h). "
-                        "Encerrando worker."
-                    )
-                    break
-
-            target_url = urls[url_idx]
-            if len(urls) > 1:
-                url_idx = (url_idx + 1) % len(urls)
-
-            session_id = await self._get_next_session_id()
-
-            stats = await self._execute_single_session(worker_id=worker_id, url=target_url, session_id=session_id)
-            session_status = stats.get("status", "FAILED") if isinstance(stats, dict) else "FAILED"
-
-            if session_status == "SUCCESS":
-                self.worker_block_counts[worker_id] = 0
-            elif session_status == "BLOCKED":
-                self.worker_block_counts[worker_id] = self.worker_block_counts.get(worker_id, 0) + 1
-                blocks = self.worker_block_counts[worker_id]
-
-                if blocks < 3:
-                    cooloff = random.uniform(6.0, 10.0)
-                    logger.warning(
-                        f"[Worker {worker_id}] ⚠️ IP bloqueado pelo Google ({blocks}/3). "
-                        f"Aguardando cooldown de {cooloff:.1f}s antes de tentar novamente..."
-                    )
-                    try:
-                        from src.web.state import StateManager
-                        sm = StateManager.get_instance()
-                        if sm.is_running:
-                            sm.update_worker(
-                                worker_id=worker_id,
-                                status=f"Bloqueado ({blocks}/3) - Cooldown",
-                                current_watch_time=0.0
-                            )
-                    except Exception:
-                        pass
-                    try:
-                        await asyncio.sleep(cooloff)
-                    except asyncio.CancelledError:
-                        break
-                else:
-                    # 3 bloqueios atingidos! Substitui o IP/proxy automaticamente
-                    self.rotate_worker_proxy(worker_id)
-                    try:
-                        await asyncio.sleep(4.0)
-                    except asyncio.CancelledError:
-                        break
-
-                # Pula a mensagem de "Watch time concluído" e tenta o próximo ciclo com o novo IP
-                continue
-
-            # Após o watch time máximo atingido da sessão bem-sucedida:
-            if not self.stop_event.is_set():
+        try:
+            while not self.stop_event.is_set():
                 if max_runtime_seconds is not None:
                     elapsed = time.time() - global_start
                     if elapsed >= max_runtime_seconds:
@@ -392,33 +356,95 @@ class BotOrchestrator:
                         )
                         break
 
-                logger.info(
-                    f"[Worker {worker_id}] 🔄 Watch time máximo concluído. Reiniciando vídeo para continuar assistindo até a Duração Total da Rodada."
-                )
+                target_url = urls[url_idx]
+                if len(urls) > 1:
+                    url_idx = (url_idx + 1) % len(urls)
 
-                delay_between = random.uniform(
-                    self.config.min_delay_between_videos,
-                    self.config.max_delay_between_videos
-                )
-                logger.info(
-                    f"[Worker {worker_id}] ☕ Pausa breve antes de reiniciar o vídeo: {delay_between:.1f}s"
-                )
-                try:
-                    from src.web.state import StateManager
-                    sm = StateManager.get_instance()
-                    if sm.is_running:
-                        sm.update_worker(
-                            worker_id=worker_id,
-                            status="Reiniciando Vídeo",
-                            current_watch_time=0.0
+                session_id = await self._get_next_session_id()
+
+                stats = await self._execute_single_session(worker_id=worker_id, url=target_url, session_id=session_id)
+                session_status = stats.get("status", "FAILED") if isinstance(stats, dict) else "FAILED"
+
+                if session_status == "SUCCESS":
+                    self.worker_block_counts[worker_id] = 0
+                elif session_status == "BLOCKED":
+                    self.worker_block_counts[worker_id] = self.worker_block_counts.get(worker_id, 0) + 1
+                    blocks = self.worker_block_counts[worker_id]
+
+                    if blocks < 3:
+                        cooloff = random.uniform(6.0, 10.0)
+                        logger.warning(
+                            f"[Worker {worker_id}] ⚠️ IP bloqueado pelo Google ({blocks}/3). "
+                            f"Aguardando cooldown de {cooloff:.1f}s antes de tentar novamente..."
                         )
-                except Exception:
-                    pass
+                        try:
+                            from src.web.state import StateManager
+                            sm = StateManager.get_instance()
+                            if sm.is_running:
+                                sm.update_worker(
+                                    worker_id=worker_id,
+                                    status=f"Bloqueado ({blocks}/3) - Cooldown",
+                                    current_watch_time=0.0
+                                )
+                        except Exception:
+                            pass
+                        try:
+                            await asyncio.sleep(cooloff)
+                        except asyncio.CancelledError:
+                            break
+                    else:
+                        # 3 bloqueios atingidos! Substitui o IP/proxy automaticamente
+                        self.rotate_worker_proxy(worker_id)
+                        try:
+                            await asyncio.sleep(4.0)
+                        except asyncio.CancelledError:
+                            break
 
-                try:
-                    await asyncio.sleep(delay_between)
-                except asyncio.CancelledError:
-                    break
+                    # Pula a mensagem de "Watch time concluído" e tenta o próximo ciclo com o novo IP
+                    continue
+
+                # Após o watch time máximo atingido da sessão bem-sucedida:
+                if not self.stop_event.is_set():
+                    if max_runtime_seconds is not None:
+                        elapsed = time.time() - global_start
+                        if elapsed >= max_runtime_seconds:
+                            logger.info(
+                                f"[Worker {worker_id}] ⏳ Duração Total da Rodada atingida ({elapsed / 3600:.2f}h). "
+                                "Encerrando worker."
+                            )
+                            break
+
+                    logger.info(
+                        f"[Worker {worker_id}] 🔄 Watch time máximo concluído. Reiniciando vídeo para continuar assistindo até a Duração Total da Rodada."
+                    )
+
+                    delay_between = random.uniform(
+                        self.config.min_delay_between_videos,
+                        self.config.max_delay_between_videos
+                    )
+                    logger.info(
+                        f"[Worker {worker_id}] ☕ Pausa breve antes de reiniciar o vídeo: {delay_between:.1f}s"
+                    )
+                    try:
+                        from src.web.state import StateManager
+                        sm = StateManager.get_instance()
+                        if sm.is_running:
+                            sm.update_worker(
+                                worker_id=worker_id,
+                                status="Reiniciando Vídeo",
+                                current_watch_time=0.0
+                            )
+                    except Exception:
+                        pass
+
+                    try:
+                        await asyncio.sleep(delay_between)
+                    except asyncio.CancelledError:
+                        break
+        finally:
+            worker = self.workers.pop(worker_id, None)
+            if worker:
+                await worker.close()
 
 
     async def run(self) -> None:
@@ -512,4 +538,12 @@ class BotOrchestrator:
         finally:
             if self._monitor_task and not self._monitor_task.done():
                 self._monitor_task.cancel()
+            await self._cleanup_all_workers()
             logger.info("🏁 Todos os workers foram encerrados.")
+
+    async def _cleanup_all_workers(self) -> None:
+        """Encerra com segurança todas as instâncias de Chromium ativas em todos os workers."""
+        workers_list = list(self.workers.values())
+        self.workers.clear()
+        if workers_list:
+            await asyncio.gather(*(w.close() for w in workers_list), return_exceptions=True)
