@@ -9,15 +9,19 @@
 
 ## 1. Visão Geral e Propósito
 
-O **YouTube View & Watch-Time Bot** é um sistema de automação assíncrona baseado em **Python** e **Playwright**, desenvolvido para estudo de automação web, testes de carga e simulação de visualizações com retenção orgânica de *watch time* no YouTube.
+O **YouTube View & Watch-Time Bot** é um sistema avançado de automação assíncrona baseado em **Python** e **Playwright**, desenvolvido para estudo de automação web, testes de carga e simulação de visualizações com retenção orgânica de *watch time* no YouTube.
 
 ### Objetivos Centrais
-- Simular navegação e comportamento de espectadores reais em vídeos individuais ou listas de URLs.
+- Simular navegação e comportamento de espectadores reais em vídeos individuais, playlists ou canais inteiros.
+- **Modo Pesquisa Orgânica (*Search & Play*):** Buscar termos/títulos na home do YouTube e clicar nos resultados orgânicos para registrar fontes como *"Pesquisa do YouTube"* no YouTube Studio Analytics.
 - Superar automaticamente interrupções do player do YouTube (pop-up "Continuar assistindo?", banners de consentimento de cookies e anúncios com botão "Pular anúncio").
-- Operar em múltiplos workers paralelos concorrentes controlados por semáforos assíncronos.
+- **Recuperação Adaptativa de Buffering:** Descongelar players estagnados em 3 níveis (Play/atalho 'k', clique forçado + frame skip, e reload preservando o watch time acumulado).
+- Operar em múltiplos workers paralelos concorrentes com inicialização escalonada (*stagger ramp-up*).
+- **Gerenciamento Inteligente de Proxies:** Pool de 100 proxies residenciais, quarentena automática de IPs bloqueados (30 min) e fallback infinito para rotação contínua.
+- **Modo Ultra-Leve Global:** Bloqueio de imagens, fontes e anúncios, forçando 144p via localStorage e poupando até 50% de CPU/RAM.
 - Oferecer controle dual: **Linha de Comando (CLI)** e **Dashboard Visual Web em tempo real** (FastAPI + WebSockets + Vanilla UI).
-- Mitigar detecções automatizadas por meio de perfis de hardware randomizados (anti-fingerprint) e micro-interações humanas.
-- Persistir e consultar o histórico consolidado de rodadas e sessões em banco de dados local SQLite.
+- Mitigar detecções automatizadas por meio de perfis de hardware randomizados (anti-fingerprint), micro-interações humanas e persistência de perfis/cookies.
+- Persistir e auditar o histórico de rodadas e sessões em banco de dados local SQLite.
 
 ---
 
@@ -26,10 +30,15 @@ O **YouTube View & Watch-Time Bot** é um sistema de automação assíncrona bas
 ```text
 d:/Projetos/15 - Youtube View Bot/
 ├── config.yaml               # Arquivo padrão de configurações do bot
-├── urls.txt                  # Lista de vídeos alvo padrão
+├── config.example.yaml       # Modelo de referência de configuração
+├── env.example               # Modelo de variáveis de ambiente
+├── proxies.txt               # Pool de 100 proxies residenciais pré-configurados
+├── proxies.example.txt       # Modelo de lista de proxies
+├── cookies.example.json      # Modelo de importação de cookies de sessão
+├── urls.txt                  # Lista de vídeos alvo padrão (com suporte a "URL | palavra-chave")
 ├── iniciar_painel.bat        # Launcher de 1 clique para iniciar o painel web no Windows
 ├── requirements.txt          # Dependências do projeto (Playwright, FastAPI, Uvicorn, Typer, Rich, etc.)
-├── tests/                    # Suíte de testes automatizados com pytest e pytest-asyncio (45 testes)
+├── tests/                    # Suíte de testes automatizados com pytest e pytest-asyncio (63 testes)
 │   ├── test_config.py
 │   ├── test_fingerprint.py
 │   ├── test_helpers.py
@@ -37,21 +46,24 @@ d:/Projetos/15 - Youtube View Bot/
 │   ├── test_browser_reuse.py
 │   ├── test_youtube_parser.py
 │   ├── test_history_db.py
+│   ├── test_session_profiles.py
+│   ├── test_performance_and_recovery.py
+│   ├── test_search_and_play.py
 │   └── test_web_api.py
 └── src/
     ├── main.py               # Entrypoint principal (CLI + inicialização do servidor Web)
     ├── config.py             # Schema de configuração (Pydantic v2) e hierarquia de carregamento
     ├── orchestrator.py       # Gestão assíncrona de workers, loops de repetição e rotação de proxies
     ├── browser/
-    │   ├── playwright_worker.py  # Processo Chromium persistente, reciclagem de BrowserContext
+    │   ├── playwright_worker.py  # Processo Chromium persistente, reciclagem de BrowserContext, bloqueio de mídia
     │   └── fingerprint.py        # Injeção JS de perfis stealth (WebGL, Canvas 2D, Audio, Hardware)
     ├── youtube/
-    │   ├── player.py             # Monitoramento de vídeo, detecção de bloqueio, contagem e replay
+    │   ├── player.py             # Monitoramento de vídeo, auto-recovery de buffering, contagem e replay
+    │   ├── search_flow.py        # Modo Search & Play (busca orgânica, cadência de digitação e clique)
     │   ├── ads.py                # Detecção e clique automático em 'Pular anúncio'
     │   ├── continue_watching.py  # Detecção e clique no diálogo 'Continuar assistindo'
     │   ├── interactions.py       # Micro-interações humanas (mouse jitter, hover, scroll sutil)
-    │   ├── parser.py             # Parser rápido de playlists e canais do YouTube
-    │   └── search_flow.py        # Modo Search & Play (busca orgânica, cadência de digitação e clique)
+    │   └── parser.py             # Parser rápido de playlists e canais do YouTube (httpx + Playwright)
     ├── web/
     │   ├── app.py                # Rotas REST (/api/history, /api/start, etc.) e WebSockets
     │   ├── state.py              # StateManager singleton, buffer de sessões e auto-save SQLite
@@ -60,8 +72,8 @@ d:/Projetos/15 - Youtube View Bot/
     │       ├── styles.css        # Design system moderno escuro (Glassmorphism neon)
     │       └── app.js            # Lógica reativa, cliente WebSocket e módulo de histórico SQLite
     └── utils/
-        ├── db.py                 # DatabaseManager: CRUD e persistência local SQLite
-        ├── helpers.py            # Normalização de URLs, User-Agents e rotação de proxies
+        ├── db.py                 # DatabaseManager: CRUD e persistência local SQLite (tabelas runs e run_sessions)
+        ├── helpers.py            # Normalização de URLs, cookies, User-Agents e rotação de proxies
         └── logger.py             # Logging estruturado e rastreamento de métricas (JSONL)
 ```
 
@@ -71,7 +83,7 @@ d:/Projetos/15 - Youtube View Bot/
 
 ```mermaid
 flowchart TD
-    User([Usuário: CLI ou Web UI]) --> Init[Carrega Configuração: config.py / BotConfig]
+    User([Usuário: CLI ou Web Hub]) --> Init[Carrega Configuração: config.py / BotConfig]
     Init --> Orch[BotOrchestrator: Inicia Tasks Assíncronas]
     Orch --> Monitor[Temporizador de Rodada: max_runtime_hours]
     
@@ -84,144 +96,121 @@ flowchart TD
     Orch --> PoolWorkers
     
     subgraph SessaoWorker ["Ciclo de Vida de Cada Worker"]
-        BrowserInit[Playwright Chromium + Flags Anti-Detecção]
-        InjectStealth[Injeção de Perfil Anti-Fingerprint + UserAgent Único]
-        Navigate[Navegar para URL do Vídeo]
-        CheckBlock{Bloqueio Google Sorry/CAPTCHA?}
-        Cookies[Aceitar Cookies / Consentimento]
+        BrowserInit[Playwright Chromium Reutilizado]
+        NewContext[Criar BrowserContext Isolado + Anti-Fingerprint + Cookies]
+        UltraLight[Filtro Ultra-Leve: Bloquear Imagens/Fontes + 144p LocalStorage]
+        
+        NavDecide{Modo Search & Play Ativado?}
+        SearchFlow[Digitar Título na Busca + Rolar + Clicar no Vídeo]
+        DirectNav[Navegação Direta: page.goto]
+        
+        CheckBlock{Bloqueio Google Sorry / CAPTCHA?}
+        RotateIP[Cooldown 6-10s ou Auto-Substituição de IP após 3 Bloqueios]
+        
+        Cookies[Tratar Banners de Cookies]
         PlayLoop[Loop de Monitoramento do Player]
+        
+        StuckCheck{Player Travado / Buffering?}
+        RecoveryNivel[Auto-Recovery: Nível 1 k/play -> Nível 2 clique/skip -> Nível 3 reload]
+        
         MicroInteractions[Micro-Interações Humanas Aleatórias]
         HandleAds[Auto Skip Ads]
         HandleContinue[Auto Continue Watching]
-        EndedCheck{Vídeo acabou antes do tempo?}
+        EndedCheck{Vídeo acabou antes da meta?}
         Replay[Reiniciar do Início]
-        EndWatch{Watch Time Máximo Atingido?}
-        NaturalPause[Pausa Breve Natural: min/max delay]
-        NextCycle[Próximo Vídeo da Lista / Reiniciar Vídeo]
+        EndWatch{Watch Time Atingido?}
+        NaturalPause[Pausa Natural entre Vídeos]
+        NextCycle[Próximo Vídeo da Lista]
     end
 
     W1 --> BrowserInit
-    BrowserInit --> InjectStealth --> Navigate --> CheckBlock
-    CheckBlock -- Sim --> MarkBlocked[Registra status BLOCKED e encerra worker]
-    CheckBlock -- Não --> Cookies --> PlayLoop
-    PlayLoop --> MicroInteractions
-    PlayLoop --> HandleAds
-    PlayLoop --> HandleContinue
-    PlayLoop --> EndedCheck
+    BrowserInit --> NewContext --> UltraLight --> NavDecide
+    NavDecide -- Sim --> SearchFlow --> CheckBlock
+    NavDecide -- Não --> DirectNav --> CheckBlock
+    
+    CheckBlock -- Bloqueado --> RotateIP --> NextCycle
+    CheckBlock -- Limpo --> Cookies --> PlayLoop
+    
+    PlayLoop --> StuckCheck
+    StuckCheck -- Sim --> RecoveryNivel --> PlayLoop
+    StuckCheck -- Não --> MicroInteractions --> HandleAds --> HandleContinue --> EndedCheck
+    
     EndedCheck -- Sim --> Replay --> PlayLoop
     EndedCheck -- Não --> EndWatch
     EndWatch -- Não --> PlayLoop
-    EndWatch -- Sim --> NaturalPause --> NextCycle --> Navigate
+    EndWatch -- Sim --> NaturalPause --> NextCycle --> NewContext
 
     Monitor -- Timeout Expirado --> StopAll[Finalização Graciosa: stop_event setado]
-    StopAll --> CloseBrowsers[Fechamento de contextos e páginas]
-    CloseBrowsers --> Relatorio[Relatório Final e Métricas Salvas]
+    StopAll --> CloseBrowsers[Fechamento de contextos e salvamento SQLite]
+    CloseBrowsers --> Relatorio[Histórico Salvo em SQLite e Notificação Web]
 ```
 
 ---
 
-## 4. Principais Recursos Implementados
+## 4. Recursos Centrais Implementados
 
-1. **Escalonamento Gradual de Inicialização (*Worker Stagger Delay*):**
-   - Evita disparos simultâneos de requisições HTTP e abertura em massa de navegadores no mesmo segundo, diluindo picos de tráfego que acionam CAPTCHAs do Google.
-2. **Detecção e Tratamento do Bloqueio "Google Sorry" / CAPTCHA:**
-   - Detecta redirecionamentos para `google.com/sorry/index` e termos de "tráfego incomum" no corpo da página, marcando o worker como `BLOCKED` e alertando no terminal e na interface web.
-3. **Loop Contínuo e Duração Total da Rodada:**
-   - O usuário estipula uma duração geral da rodada (ex: `1.0h` a `12.0h`).
-   - Os workers alternam vídeos ou reiniciam o mesmo vídeo ciclicamente até que a rodada seja completada por timeout global automático.
-4. **Unidade do Watch Time Padronizada em Minutos:**
-   - Tanto na CLI quanto no Dashboard Web, os tempos de visualização mínima e máxima são configurados intuitivamente em **minutos** (convertidos internamente para segundos).
-5. **Anti-Fingerprint Determinístico por Worker:**
-   - Cada instância de worker recebe uma assinatura WebGL (GPU real como NVIDIA RTX 3060, Intel Iris Xe, AMD RX 6700), ruído suave de Canvas 2D e AudioContext, além de contagem customizada de CPU e memória RAM.
-6. **Dashboard Web em Tempo Real (FastAPI + WebSockets):**
-   - Transmissão ao vivo de status dos workers, progresso percentual, consumo de tempo, logs e métricas globais sem recarregamento de página.
+1. **Modo Pesquisa Orgânica (*Search & Play*):**
+   - Em vez de tráfego direto, o worker digita o título ou palavra-chave na barra de busca do YouTube com digitação humanizada, rola os resultados e clica no vídeo correspondente.
+   - Atribui visualizações no YouTube Studio como **"Pesquisa do YouTube" (YouTube Search)**.
+   - Resolução de títulos por endpoint oEmbed público do YouTube e suporte a palavras-chave customizadas (`URL | termo`). Fallback transparente para navegação direta caso não rankeie.
+2. **Modo Ultra-Leve Global (`block_heavy_media`):**
+   - Interceptação de rotas via `context.route` abortando imagens, fontes externas, avatares (`yt3.ggpht.com`), thumbnails (`i.ytimg.com`) e telemetria de anúncios (`doubleclick.net`, `googleads`).
+   - Força resolução 144p (`tiny`) no `localStorage` do YouTube antes de carregar o player.
+   - Economia de até 50% de CPU/RAM e até 90% de dados de rede.
+3. **Auto-Recuperação de Player Travado / Buffering (`auto_player_recovery`):**
+   - Recuperação escalonada em 3 níveis (Nível 1: Play/'k', Nível 2: clique forçado + frame skip, Nível 3: recarregamento da página preservando o watch time acumulado).
+   - Feedback visual dinâmico no card do worker: `"Recuperando (Nx)"`.
+4. **Gerenciamento Inteligente de Proxies:**
+   - Suporte a proxies residenciais e rotativos com pool de 100 IPs (`proxies.txt`).
+   - Quarentena inteligente de 30 minutos para IPs que sofreram 3 bloqueios.
+   - Fallback dinâmico infinito para gateways que aceitam IDs de sessão únicos (`sessid.w{worker_id}_{uuid}`).
+5. **Reuso Eficiente de Processos Chromium:**
+   - Processo `.exe` do Chromium mantido ativo continuamente por worker, reciclando apenas `BrowserContext` leve e isolado a cada sessão.
+6. **Parser Automático de Playlists e Canais:**
+   - Extrai automaticamente todos os vídeos de links de playlists (`playlist?list=...`) ou canais (`/@canal/videos`), com botão dedicado no Dashboard Web ("✨ Extrair Playlist/Canal").
+7. **Histórico e Persistência de Execuções (SQLite):**
+   - Registro automático de cada rodada (`runs`) e sessão de vídeo (`run_sessions`) em banco local SQLite (`bot_history.db`).
+   - Aba visual de Histórico no painel com KPIs consolidados e modal de auditoria por sessão.
+8. **Perfis Persistentes & Cookies de Sessão:**
+   - Suporte a cookies JSON (Playwright/Cookie-Editor) e Netscape (tab-separated), com opção de perfil persistente por worker (`profiles/worker_{id}`).
+9. **Escalonamento Gradual (*Worker Stagger Delay*):**
+   - Inicialização espaçada entre workers (padrão 15s) para evitar disparos de requisições simultâneas em massa no mesmo IP/rede.
+10. **Anti-Fingerprint Determinístico:**
+    - Assinaturas WebGL de GPUs reais, micro-ruído imperceptível no Canvas 2D e AudioContext, além de contagens customizadas de CPU e memória RAM por worker.
+11. **Simulação de Micro-Comportamento Humano:**
+    - Movimento de cursor suave (*mouse jitter*), hover temporário no player e rolagem de página (*natural scroll*).
+12. **Superação de Interrupções do Player:**
+    - Detecção contínua e clique no diálogo "Continuar assistindo?", bypass de cookies de consentimento e pulo automático de anúncios (*Skip Ad*).
+13. **Loop Contínuo e Duração da Rodada:**
+    - Temporizador global configurado em horas com encerramento gracioso e rotação cíclica de vídeos.
+14. **Dashboard Web em Tempo Real (FastAPI + WebSockets):**
+    - Métricas ao vivo, cards de workers reativos, streaming de logs e controle total de inicialização/parada.
 
 ---
 
-## 5. Análise de Pontos Fortes e Fragilidades
+## 5. Matriz de Gargalos Originais vs. Soluções Implementadas
 
-### Pontos Fortes
-- **Totalmente Assíncrono:** Utiliza `asyncio` e Playwright async nativo, garantindo alta concorrência sem bloqueio da thread principal.
-- **Frontend Autocontido:** Interface estática moderna (Vanilla CSS + JS), dispensando Node.js, compilações pesadas ou `npm install`.
-- **Suíte de Testes 100% Funcional:** Testes rápidos e isolados cobrindo desde regras de configuração e APIs até rotinas de loop e temporização.
-- **Encerramento Limpo (*Graceful Shutdown*):** Captura `Ctrl+C` e sinais de interrupção, fechando contextos de navegador e salvando métricas sem deixar processos órfãos.
-
-### Fragilidades e Gargalos Identificados
-| Área | Fragilidade Atual | Impacto |
-|---|---|---|
-| **Rede / IP** | Ausência de suporte a Proxy (todos usam o mesmo IP local). | Execuções com muitos workers (>5) ou muitas horas geram bloqueio temporário do Google/YouTube (`sorry/index`). |
-| **Consumo de Hardware** | Cada worker cria uma nova instância `chromium.launch()` completa. | Consumo excessivo de memória RAM e CPU no Windows quando configurado para 10+ workers. |
-| **Persistência de Dados** | Estado e histórico residem na memória do servidor web e em arquivos `.jsonl`. | Reiniciar o servidor zera as métricas na UI; falta histórico de rodadas passadas. |
-| **Entrada de Vídeos** | Suporta apenas links diretos de vídeos individuais. | Não suporta extração automática de todos os vídeos de um canal ou playlist pública. |
-| **Resolução de Bloqueio** | Worker bloqueado por CAPTCHA é apenas encerrado. | Não há rotação automática de IP, pausa adaptativa inteligente de esfriamento (*cool-down*) ou suporte a solver. |
-| **Identidade** | Navegação 100% como visitante deslogado. | O YouTube pode desconsiderar views recorrentes vindas da mesma rede anônima após certo limiar. |
+| Área | Limitação Original (v1.x) | Solução Implementada (v2.4) | Status |
+|---|---|---|---|
+| **Rede / IP** | Ausência de suporte a Proxy (todos no IP local). | Suporte completo a Proxies HTTP/SOCKS5, pool de 100 IPs, quarentena de 30 min e fallback infinito sob demanda. | ✅ **Resolvido** |
+| **Consumo de Hardware** | `chromium.launch()` aberto e fechado a cada vídeo. | Reuso contínuo do processo Chromium por worker + Modo Ultra-Leve Global bloqueando imagens/fontes e forçando 144p. | ✅ **Resolvido** |
+| **Persistência de Dados** | Estado puramente em memória e logs voláteis. | Persistência relacional em SQLite leve com aba dedicada de Histórico e modal de auditoria no Web Hub. | ✅ **Resolvido** |
+| **Entrada de Vídeos** | Apenas links de vídeos individuais eram aceitos. | Parser híbrido (httpx + Playwright) com expansão automática de Playlists e Canais na CLI e na Web. | ✅ **Resolvido** |
+| **Resolução de Bloqueio** | Worker bloqueado era encerrado sem recuperação. | Detecção ativa do Google Sorry, cooldown de esfriamento e auto-substituição de IP após 3 bloqueios. | ✅ **Resolvido** |
+| **Identidade & Retenção** | Apenas visitante anônimo deslogado. | Suporte a perfis de usuário persistentes e injeção universal de cookies (JSON e Netscape). | ✅ **Resolvido** |
+| **Fonte de Tráfego** | Acesso direto (`Direct/Unknown`), penalizado pelo YouTube. | **Modo Search & Play:** digitação humana na busca do YouTube e clique orgânico no resultado ("YouTube Search"). | ✅ **Resolvido** |
+| **Buffering / Freeze** | Travamentos de conexão paralisavam o player. | **Auto-Player Recovery:** mecanismo adaptativo de 3 níveis que recupera a reprodução preservando o watch time. | ✅ **Resolvido** |
 
 ---
 
-## 6. Plano de Ação Recomendado para Próximas Melhorias
+## 6. Próximos Passos & Oportunidades Futuras (Backlog)
 
-### Prioridade 1: Camada de Rede & Mitigação de Bloqueios (Essencial)
-- [x] **Suporte a Proxies (HTTP / SOCKS5 / Rotativos / Sessões) — CONCLUÍDO:**
-  - Configuração no `BotConfig`, CLI (`--proxy`, `--proxies-file`, etc.) e formulário visual no Web Dashboard.
-  - Suporte a múltiplos formatos: `proxies.txt` (lista round-robin), URLs individuais e Gateway com Template de Sessão (`{worker_id}`).
-  - Modo Economia Máxima de Banda (`proxy_low_bandwidth_mode`): força qualidade 144p (`tiny`) no player e intercepta tráfego HTTP abortando imagens, fontes e mídias pesadas secundárias (reduzindo em até 90% o consumo de GB do proxy).
-  - Exibição em tempo real do proxy/IP mascarado no card de cada worker na interface web.
-- [x] **Mecanismo Inteligente de Cooldown & Auto-Substituição de IP após 3 Bloqueios — CONCLUÍDO:**
-  - Tratamento direto de sessões com status `BLOCKED` (elimina o loop infinito de reinício de vídeo sem watch time).
-  - Contador de bloqueios consecutivos por worker: bloqueios 1 e 2 acionam pausa de esfriamento/cooldown de 6s a 10s.
-  - Ao atingir o 3º bloqueio consecutivo, o orquestrador gera automaticamente um novo token de sessão residencial único (`rotate_proxy_session`) ou avança para o próximo proxy do pool, entregando um IP residencial limpo de imediato.
-  - O novo IP e status são atualizados em tempo real no Dashboard Web ("Novo IP Atribuído").
-- [x] **Pool Expandido (100 Proxies) + Quarentena Temporária + Fallback Infinito On-The-Fly — CONCLUÍDO:**
-  - `proxies.txt` expandido de 20 para 100 proxies residenciais brasileiros pré-configurados (`worker1` a `worker100`).
-  - **Quarentena Inteligente (`quarantine_minutes: 30`)**: IPs que sofreram 3 bloqueios entram automaticamente em quarentena de 30 minutos, impedindo que o bot retorne a um IP ainda sinalizado pelo Google.
-  - **Seleção Inteligente no Pool**: Ao rotacionar, o orquestrador varre os 100 proxies procurando o próximo IP que não esteja em uso por outro worker ativo nem em quarentena.
-  - **Fallback Dinâmico Infinito**: Caso todos os 100 proxies do arquivo estejam ocupados ou em quarentena (ou haja uma lista com apenas 1 gateway), o orquestrador ativa geração dinâmica on-the-fly (`sessid.w{worker_id}_{uuid}`), acessando diretamente o pool global de milhões de IPs da DataImpulse, garantindo que o bot **nunca fique sem proxies limpos**.
+Todas as prioridades essenciais de rede, performance, automação, persistência e tráfego orgânico foram **100% concluídas**. Para versões subsequentes (v2.5+), as seguintes melhorias estratégicas podem ser consideradas:
 
-
-
-### Prioridade 2: Otimização de Performance e Consumo de Recursos
-- [x] **Reuso Eficiente de Instâncias Chromium — CONCLUÍDO:**
-  - Processo `.exe` do Chromium mantido ativo e em execução contínua por worker, eliminando picos de CPU e lentidão de reabertura de navegador a cada novo vídeo.
-  - Criação de `BrowserContext` leve e descartável por sessão (`browser.new_context()`), assegurando isolamento total de cookies, cache, storage e injeção limpa de anti-fingerprint por visualização.
-  - Reciclagem automática e graciosa do processo Chromium sempre que o proxy do worker for alterado ou em caso de desconexão.
-- [x] **Bloqueio Seletivo de Mídias Pesadas & Modo Ultra-Leve Global (`block_heavy_media`) — CONCLUÍDO:**
-  - Interceptação ativa via `context.route` abortando imagens, fontes externas, avatares (`yt3.ggpht.com`), thumbnails (`i.ytimg.com`) e telemetria de anúncios (`doubleclick.net`, `googleads`).
-  - Desacoplado do modo proxy: funciona globalmente tanto em conexões locais diretas quanto roteadas por proxy.
-  - Pré-configuração no `localStorage` do YouTube forçando qualidade 144p (`tiny`) antes mesmo do carregamento do player.
-  - Redução de até 50% de CPU/RAM e até 90% no tráfego de rede.
-  - Controle integrado via CLI (`--block-heavy-media` / `--no-block-heavy-media`), `BotConfig` e toggle no Web Dashboard.
-- [x] **Recuperação Adaptativa de Buffering & Player Travado (`auto_player_recovery`) — CONCLUÍDO:**
-  - Inspeção contínua no DOM monitorando estagnação de `currentTime` e `readyState` do elemento `<video>`.
-  - Mecanismo escalonado em 3 níveis:
-    - **Nível 1 (~10s de freeze):** Disparo de atalho 'k' e `video.play()` com log de advertência.
-    - **Nível 2 (~20s de freeze):** Clique forçado no elemento `#movie_player` e avanço de frame (+1.0s).
-    - **Nível 3 (~30s de freeze contínuo):** Recarregamento limpo da página (`page.goto`) preservando o tempo já assistido acumulado (`accumulated_watch_time`) sem zerar a sessão.
-  - Feedback visual em tempo real no Dashboard Web exibindo status reativo: `"Recuperando (Nx)"`.
-  - Controle integrado via CLI (`--auto-recovery` / `--no-auto-recovery`), `BotConfig` e toggle no Web Dashboard.
-
-### Prioridade 3: Funcionalidades & Automação Avançada
-- [x] **Parser Automático de Playlists e Canais — CONCLUÍDO:**
-  - Extração automática de todos os vídeos de Playlists (`playlist?list=...`) e Canais (`/@canal/videos` ou `/@canal`).
-  - Motor de extração híbrido em duas camadas: requisição direta ultra-rápida via `httpx` (<1s) com fallback inteligente em Playwright headless.
-  - Botão interativo no Dashboard Web ("✨ Extrair Playlist/Canal") que resolve e carrega a lista diretamente na interface com feedback visual de contagem.
-  - Expansão automática no orquestrador: URLs mistas na CLI, Web ou `urls.txt` são resolvidas de forma transparente antes do início da rodada.
-- [x] **Histórico e Persistência de Execuções na Web (SQLite) — CONCLUÍDO:**
-  - Persistência automática em SQLite leve (`DatabaseManager` em `src/utils/db.py`) com tabelas relacionais `runs` e `run_sessions`.
-  - Auto-gravação disparada no encerramento de cada rodada via `StateManager.finish_run()`.
-  - Nova aba interativa "📜 Histórico de Rodadas" no Dashboard Web com KPIs agregados (horas acumuladas, total de rodadas, taxa de sucesso).
-  - Tabela responsiva com detalhamento de rodadas e modal de auditoria por sessão de vídeo individual.
-  - Endpoints REST completos: `GET /api/history`, `GET /api/history/{run_id}`, `DELETE /api/history/{run_id}` e `DELETE /api/history`.
-  - Proteção de privacidade: `bot_history.db` e `*.db` estritamente ignorados no `.gitignore`.
-- [x] **Suporte a Cookies de Sessão & Perfis Persistentes — CONCLUÍDO:**
-  - Armazenamento e isolamento de perfis persistentes por worker (`profiles/worker_{id}/storage_state.json`) com persistência automática de cookies, histórico e preferências do player.
-  - Parser universal de cookies (`parse_cookies_file` em `src/utils/helpers.py`) suportando formato JSON (Playwright/Cookie-Editor), Netscape (tab-separated) e arquivos dedicados por worker (`worker_{id}.json`).
-  - Injeção e salvamento dinâmico sem abrir mão do reuso de instâncias de Chromium em execução contínua.
-  - Controle integrado via CLI (`--persistent-profiles`, `--cookies-file`) e Web Dashboard (toggle visual com campo de arquivo de cookies).
-  - Arquivo modelo de referência `cookies.example.json` adicionado ao projeto e exclusão rígida de credenciais/sessões no `.gitignore`.
-- [x] **Modo Pesquisa Orgânica ("Search & Play") — CONCLUÍDO:**
-  - Em vez de navegação direta (`page.goto`), o worker navega para `https://www.youtube.com`, localiza o campo de busca e digita o título ou termo com cadência humana aleatorizada.
-  - Varre os resultados da busca com rolagem natural de mouse (`mouse.wheel`) até localizar o elemento com o ID do vídeo alvo (`a[href*="{vid}"]`) e clica organicamente nele.
-  - Registra a fonte de visualização no YouTube Studio como **"Pesquisa do YouTube" (YouTube Search)**, multiplicando a autoridade orgânica e reduzindo descartes do algoritmo.
-  - Resolução automática de títulos via endpoint oEmbed público do YouTube com cache em memória, além de suporte a palavras-chave customizadas (`URL | palavra-chave` ou `palavra;URL`).
-  - Fallback transparente e tolerante a falhas para navegação direta caso o vídeo não seja localizado após 4 rolagens.
-  - Controle integrado via CLI (`--search-and-play`), `BotConfig` e toggle no Web Dashboard.
+### Prioridade 4: Relatórios & Automação de Agendamento
+- [ ] **Exportação de Relatórios de Histórico (CSV / JSON) no Dashboard Web:**
+  - Botão interativo na aba "Histórico de Rodadas" para download direto de planilhas consolidadas contendo métricas de cada sessão de vídeo realizada.
+- [ ] **Agendador de Sessões / Modo Janela de Audiência (Scheduler):**
+  - Configuração de horários de atividade programados (ex: picos de audiência diurnos vs. repouso durante a madrugada) para simulação de curvas orgânicas de público.
+- [ ] **Integração com Solvers Externos de CAPTCHA (2Captcha / CapSolver):**
+  - Módulo opcional para resolução automática de reCAPTCHA em casos de redes sem acesso a proxies residenciais limpos.
