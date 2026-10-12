@@ -28,6 +28,15 @@ Automação assíncrona em Python com **Playwright** para simulação realista d
   - **Auto-Substituição após 3 Bloqueios:** Detecta sinalizações do Google e rotaciona o IP sem interromper a execução do worker.
   - **Fallback Dinâmico Infinito:** Gera sessões únicas sob demanda (`sessid.w{worker_id}_{uuid}`) para provedores como DataImpulse, Smartproxy e BrightData, garantindo fornecimento contínuo de IPs sem risco de esgotamento.
   - **Modo Economia de Banda:** Força qualidade 144p (`tiny`) e bloqueia requisições de anúncios, rastreadores e imagens secundárias, reduzindo o consumo de dados em até 90%.
+- **Modo Ultra-Leve Global (`block_heavy_media`):**
+  - Interceptação ativa de requisições de avatares (`yt3.ggpht.com`), thumbnails (`i.ytimg.com`), fontes externas, anúncios e imagens decorativas em qualquer execução (local ou com proxy).
+  - Pré-configura localStorage do YouTube para forçar 144p (`tiny`), reduzindo em até 50% o consumo de CPU e memória RAM das instâncias de Chromium.
+- **Recuperação Adaptativa de Buffering & Player Travado (`auto_player_recovery`):**
+  - Monitoramento adaptativo de estagnação de `currentTime` e `readyState` do player HTML5.
+  - Recuperação em 3 níveis escalonados:
+    - **Nível 1 (~10s parado):** Disparo de evento Play e atalho 'k'.
+    - **Nível 2 (~20s parado):** Clique forçado no contêiner do player e avanço de frame (+1s).
+    - **Nível 3 (~30s parado):** Recarregamento limpo da página preservando o tempo já assistido acumulado (`accumulated_watch_time`).
 - **Anti-Fingerprint Determinístico e Avançado:**
   - Assinaturas WebGL de GPUs reais (NVIDIA RTX, Intel Iris Xe, AMD RX).
   - Micro-ruído imperceptível no Canvas 2D e AudioContext.
@@ -159,9 +168,9 @@ python -m src.main --urls-file urls.txt --workers 4 --duration-hours 2.5
 python -m src.main --urls-file urls.txt --workers 4 --proxy --proxies-file proxies.txt
 ```
 
-### 4. Modo Headless (sem interface gráfica visível)
+### 4. Modo Headless Ultra-Leve (Economia de CPU/RAM com Auto-Recuperação)
 ```bash
-python -m src.main --urls-file urls.txt --workers 5 --headless
+python -m src.main --urls-file urls.txt --workers 5 --headless --block-heavy-media --auto-recovery
 ```
 
 ---

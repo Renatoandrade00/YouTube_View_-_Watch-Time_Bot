@@ -130,6 +130,34 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--profiles-dir", type=str, default=None, help="Diretório para armazenamento dos perfis (padrão: profiles)")
     parser.add_argument("--cookies-file", type=str, default=None, help="Caminho para arquivo de cookies JSON ou Netscape (ex: cookies.json)")
 
+    # Otimização de Performance e Auto-Recovery
+    parser.add_argument(
+        "--block-heavy-media",
+        dest="block_heavy_media",
+        action="store_true",
+        default=None,
+        help="Modo ultra-leve global: bloquear imagens, fontes e avatares para reduzir consumo de CPU/RAM",
+    )
+    parser.add_argument(
+        "--no-block-heavy-media",
+        dest="block_heavy_media",
+        action="store_false",
+        help="Permitir carregamento de todas as mídias visuais secundárias",
+    )
+    parser.add_argument(
+        "--auto-recovery",
+        dest="auto_player_recovery",
+        action="store_true",
+        default=None,
+        help="Ativar recuperação automática do player em caso de buffering infinito ou pausa inesperada",
+    )
+    parser.add_argument(
+        "--no-auto-recovery",
+        dest="auto_player_recovery",
+        action="store_false",
+        help="Desativar recuperação automática do player",
+    )
+
     # Argumentos do Modo Visual Web
     parser.add_argument("--web", "--gui", dest="web_mode", action="store_true", default=False, help="Iniciar painel de controle visual no navegador")
     parser.add_argument("--port", type=int, default=8000, help="Porta para o servidor web (padrão: 8000)")
@@ -199,6 +227,8 @@ async def main_async() -> None:
         "use_persistent_profiles": args.use_persistent_profiles,
         "profiles_dir": args.profiles_dir,
         "cookies_file": args.cookies_file,
+        "block_heavy_media": args.block_heavy_media,
+        "auto_player_recovery": args.auto_player_recovery,
     }
 
     try:

@@ -81,6 +81,9 @@ class StartBotRequest(BaseModel):
     proxy_low_bandwidth: bool = Field(default=True)
     use_persistent_profiles: bool = Field(default=False)
     cookies_file: Optional[str] = Field(default=None)
+    block_heavy_media: bool = Field(default=True)
+    auto_player_recovery: bool = Field(default=True)
+
 
 
 @app.get("/")
@@ -224,6 +227,8 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
         proxy_low_bandwidth_mode=req.proxy_low_bandwidth,
         use_persistent_profiles=req.use_persistent_profiles,
         cookies_file=req.cookies_file,
+        block_heavy_media=req.block_heavy_media,
+        auto_player_recovery=req.auto_player_recovery,
     )
 
     tracker = MetricsTracker()

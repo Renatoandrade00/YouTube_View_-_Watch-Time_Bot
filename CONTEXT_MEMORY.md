@@ -1,8 +1,8 @@
 # Memória de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de Atualização:** Outubro de 2026  
-> **Versão do Projeto:** 2.2 (CLI + Web Hub + SQLite + Session Profiles)  
-> **Status dos Testes:** 51/51 testes passando (100% de sucesso)  
+> **Versão do Projeto:** 2.3 (Ultra-Light Global + Auto Player Recovery + SQLite + Session Profiles)  
+> **Status dos Testes:** 56/56 testes passando (100% de sucesso)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
 
 ---
@@ -183,8 +183,20 @@ flowchart TD
   - Processo `.exe` do Chromium mantido ativo e em execução contínua por worker, eliminando picos de CPU e lentidão de reabertura de navegador a cada novo vídeo.
   - Criação de `BrowserContext` leve e descartável por sessão (`browser.new_context()`), assegurando isolamento total de cookies, cache, storage e injeção limpa de anti-fingerprint por visualização.
   - Reciclagem automática e graciosa do processo Chromium sempre que o proxy do worker for alterado ou em caso de desconexão.
-- [ ] **Bloqueio Seletivo de Mídias Pesadas Não Essenciais:**
-  - Possibilidade de abortar o carregamento de fontes personalizadas, imagens de banners e avatares (mantendo apenas o streaming do player de vídeo), economizando largura de banda e CPU.
+- [x] **Bloqueio Seletivo de Mídias Pesadas & Modo Ultra-Leve Global (`block_heavy_media`) — CONCLUÍDO:**
+  - Interceptação ativa via `context.route` abortando imagens, fontes externas, avatares (`yt3.ggpht.com`), thumbnails (`i.ytimg.com`) e telemetria de anúncios (`doubleclick.net`, `googleads`).
+  - Desacoplado do modo proxy: funciona globalmente tanto em conexões locais diretas quanto roteadas por proxy.
+  - Pré-configuração no `localStorage` do YouTube forçando qualidade 144p (`tiny`) antes mesmo do carregamento do player.
+  - Redução de até 50% de CPU/RAM e até 90% no tráfego de rede.
+  - Controle integrado via CLI (`--block-heavy-media` / `--no-block-heavy-media`), `BotConfig` e toggle no Web Dashboard.
+- [x] **Recuperação Adaptativa de Buffering & Player Travado (`auto_player_recovery`) — CONCLUÍDO:**
+  - Inspeção contínua no DOM monitorando estagnação de `currentTime` e `readyState` do elemento `<video>`.
+  - Mecanismo escalonado em 3 níveis:
+    - **Nível 1 (~10s de freeze):** Disparo de atalho 'k' e `video.play()` com log de advertência.
+    - **Nível 2 (~20s de freeze):** Clique forçado no elemento `#movie_player` e avanço de frame (+1.0s).
+    - **Nível 3 (~30s de freeze contínuo):** Recarregamento limpo da página (`page.goto`) preservando o tempo já assistido acumulado (`accumulated_watch_time`) sem zerar a sessão.
+  - Feedback visual em tempo real no Dashboard Web exibindo status reativo: `"Recuperando (Nx)"`.
+  - Controle integrado via CLI (`--auto-recovery` / `--no-auto-recovery`), `BotConfig` e toggle no Web Dashboard.
 
 ### Prioridade 3: Funcionalidades & Automação Avançada
 - [x] **Parser Automático de Playlists e Canais — CONCLUÍDO:**

@@ -157,8 +157,8 @@ class PlaywrightWorker:
                     logger.warning(f"[Worker {self.worker_id}] ⚠️ Falha ao injetar cookies: {e}")
 
         try:
-            # Economia de tráfego do proxy: intercepta e bloqueia imagens, fontes, trackers e domínios de anúncios
-            if self.config.proxy_low_bandwidth_mode:
+            # Modo Ultra-Leve / Economia de tráfego: intercepta e bloqueia imagens, fontes, trackers e anúncios
+            if getattr(self.config, "block_heavy_media", True) or self.config.proxy_low_bandwidth_mode:
                 # Pré-configura localStorage do YouTube para forçar 144p (tiny) antes mesmo do player carregar
                 await context.add_init_script("""() => {
                     try {

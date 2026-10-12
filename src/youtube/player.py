@@ -157,13 +157,14 @@ async def watch_video(
     await random_async_sleep(1.0, 2.5)
 
     # Inicia e confere o player
-    is_low_bw = getattr(config, "proxy_low_bandwidth_mode", True)
+    is_low_bw = getattr(config, "block_heavy_media", True) or getattr(config, "proxy_low_bandwidth_mode", True)
     await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
 
     start_time = time.time()
     last_active_time = start_time
     accumulated_watch_time = 0.0
     last_video_current_time = 0.0
+    stuck_buffer_count = 0
     sleep_duration = max(1.0, config.poll_interval)
 
     while accumulated_watch_time < target_watch_seconds:
@@ -220,12 +221,18 @@ async def watch_video(
                     paused: video.paused,
                     ended: video.ended,
                     currentTime: video.currentTime,
-                    duration: video.duration
+                    duration: video.duration,
+                    readyState: video.readyState
                 };
             }""")
 
             if video_state.get("exists"):
-                if video_state.get("ended"):
+                current_ct = video_state.get("currentTime", 0.0)
+                is_paused = video_state.get("paused", False)
+                is_ended = video_state.get("ended", False)
+
+                if is_ended:
+                    stuck_buffer_count = 0
                     # O vídeo terminou antes da meta: reinicia o vídeo do início para completar o watch time
                     logger.info(
                         f"[Worker {worker_id}] 🔄 Vídeo finalizou aos {accumulated_watch_time:.0f}s. "
@@ -246,14 +253,77 @@ async def watch_video(
                         await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
                     except Exception as err:
                         logger.debug(f"[Worker {worker_id}] Erro ao reiniciar reprodução do vídeo: {err}")
-                elif video_state.get("paused"):
-                    # Se pausado, tenta retomar
+
+                elif is_paused:
+                    stuck_buffer_count += 1
                     await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
 
+                elif abs(current_ct - last_video_current_time) < 0.2:
+                    # Player diz que não está pausado, mas currentTime está congelado (buffering / freeze)
+                    stuck_buffer_count += 1
                 else:
-                    # Vídeo tocando ativamente
+                    # Tocando normalmente e progredindo!
+                    stuck_buffer_count = 0
                     accumulated_watch_time += elapsed_loop
-                    last_video_current_time = video_state.get("currentTime", 0.0)
+                    last_video_current_time = current_ct
+
+                # Mecanismo de Recuperação Adaptativa de Buffering / Travamento (Auto-Recovery)
+                if stuck_buffer_count >= 2 and getattr(config, "auto_player_recovery", True):
+                    try:
+                        from src.web.state import StateManager
+                        sm = StateManager.get_instance()
+                        if sm.is_running:
+                            sm.update_worker(
+                                worker_id=worker_id,
+                                status=f"Recuperando ({stuck_buffer_count}x)",
+                                current_watch_time=accumulated_watch_time
+                            )
+                    except Exception:
+                        pass
+
+                    if stuck_buffer_count == 2:
+                        logger.warning(
+                            f"[Worker {worker_id}] ⚠️ Player estagnado (~10s). Acionando Play e atalho 'k'..."
+                        )
+                        try:
+                            await page.keyboard.press("k")
+                            await page.evaluate("""() => {
+                                const v = document.querySelector('video');
+                                if (v) { v.play().catch(() => {}); }
+                            }""")
+                        except Exception:
+                            pass
+
+                    elif stuck_buffer_count == 4:
+                        logger.warning(
+                            f"[Worker {worker_id}] ⚠️ Buffering persistente (~20s). Forçando clique no player e avanço de frame..."
+                        )
+                        try:
+                            player_elem = page.locator("#movie_player, .html5-video-player").first
+                            if await player_elem.is_visible(timeout=500):
+                                await player_elem.click(timeout=500, force=True)
+                            await page.evaluate("""() => {
+                                const v = document.querySelector('video');
+                                if (v) {
+                                    v.currentTime = Math.min(v.duration || 9999, v.currentTime + 1.0);
+                                    v.play().catch(() => {});
+                                }
+                            }""")
+                        except Exception:
+                            pass
+
+                    elif stuck_buffer_count >= 6:
+                        logger.warning(
+                            f"[Worker {worker_id}] 🔄 Buffering infinito detectado (~30s). Recarregando página preservando tempo acumulado ({accumulated_watch_time:.0f}s)..."
+                        )
+                        stuck_buffer_count = 0
+                        try:
+                            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                            await asyncio.sleep(2.0)
+                            await handle_consent_popups(page)
+                            await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
+                        except Exception as e:
+                            logger.debug(f"[Worker {worker_id}] Falha ao recarregar página para auto-recovery: {e}")
             else:
                 # Se não encontrou o elemento de vídeo após 15s de navegação, verifica se caiu em bloqueio textual
                 if (time.time() - start_time) > 15.0 and accumulated_watch_time == 0:

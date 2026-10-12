@@ -51,6 +51,9 @@ class BotConfig(BaseModel):
     profiles_dir: str = Field(default="profiles", description="Diretório onde os perfis isolados de cada worker serão armazenados")
     cookies_file: Optional[str] = Field(default=None, description="Caminho para arquivo de cookies JSON ou Netscape a ser injetado nos navegadores")
 
+    block_heavy_media: bool = Field(default=True, description="Modo ultra-leve global: bloquear imagens não essenciais, fontes e avatares para reduzir consumo de CPU/RAM e banda")
+    auto_player_recovery: bool = Field(default=True, description="Recuperação automática do player em caso de buffering infinito ou travamento de reprodução")
+
     @field_validator("max_watch")
     @classmethod
     def validate_watch_range(cls, v: int, info) -> int:

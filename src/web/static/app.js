@@ -26,6 +26,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const cookiesFileInput = document.getElementById("cookies-file-input");
     const toggleHeadless = document.getElementById("toggle-headless");
     const toggleMute = document.getElementById("toggle-mute");
+    const toggleBlockMedia = document.getElementById("toggle-block-media");
+    const toggleAutoRecovery = document.getElementById("toggle-auto-recovery");
 
     // Proxy DOM Elements
     const toggleEnableProxy = document.getElementById("toggle-enable-proxy");
@@ -489,6 +491,8 @@ document.addEventListener("DOMContentLoaded", () => {
             proxy_low_bandwidth: toggleProxyLowBw ? toggleProxyLowBw.checked : true,
             use_persistent_profiles: togglePersistentProfiles ? togglePersistentProfiles.checked : false,
             cookies_file: (cookiesFileInput && cookiesFileInput.value.trim()) ? cookiesFileInput.value.trim() : null,
+            block_heavy_media: toggleBlockMedia ? toggleBlockMedia.checked : true,
+            auto_player_recovery: toggleAutoRecovery ? toggleAutoRecovery.checked : true,
         };
 
 
