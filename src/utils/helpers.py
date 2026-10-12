@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 import random
-from typing import Tuple
+from typing import Dict, List, Optional, Tuple
 
 USER_AGENTS = [
     # Chrome Windows
@@ -149,5 +150,103 @@ def rotate_proxy_session(proxy_str: str, worker_id: int) -> str:
         pass
 
     return proxy_str
+
+
+def parse_cookies_file(cookies_path: str | Path, worker_id: Optional[int] = None) -> list[dict]:
+    """
+    Carrega e formata cookies de um arquivo para o formato aceito pelo Playwright.
+    Suporta:
+    1. Arquivo de cookies específico para o worker (ex: cookies_worker_1.json ou cookies/worker_1.json).
+    2. Formato JSON (Array de cookies ou objeto de storage_state com chave 'cookies').
+    3. Formato Netscape (.txt / .cookie com campos separados por tabulação).
+    """
+    path = Path(cookies_path)
+
+    # 1. Tenta encontrar arquivo específico do worker se aplicável
+    if worker_id is not None:
+        candidates = [
+            path.parent / f"worker_{worker_id}.json",
+            path.parent / f"worker_{worker_id}.txt",
+            path.parent / f"{path.stem}_worker_{worker_id}{path.suffix}",
+        ]
+        for cand in candidates:
+            if cand.exists() and cand.is_file():
+                path = cand
+                break
+
+    if not path.exists() or not path.is_file():
+        return []
+
+    content = path.read_text(encoding="utf-8").strip()
+    if not content:
+        return []
+
+    cookies = []
+
+    # Tenta interpretar como JSON primeiro
+    if content.startswith("[") or content.startswith("{"):
+        import json
+        try:
+            data = json.loads(content)
+            raw_list = data if isinstance(data, list) else data.get("cookies", [])
+            for item in raw_list:
+                if not isinstance(item, dict) or "name" not in item or "value" not in item:
+                    continue
+                c = {
+                    "name": str(item["name"]),
+                    "value": str(item["value"]),
+                    "domain": item.get("domain", ".youtube.com"),
+                    "path": item.get("path", "/"),
+                }
+                if "expires" in item and item["expires"] is not None:
+                    try:
+                        c["expires"] = float(item["expires"])
+                    except (ValueError, TypeError):
+                        pass
+                if "httpOnly" in item:
+                    c["httpOnly"] = bool(item["httpOnly"])
+                if "secure" in item:
+                    c["secure"] = bool(item["secure"])
+                if "sameSite" in item and item["sameSite"] in ("Strict", "Lax", "None"):
+                    c["sameSite"] = item["sameSite"]
+                cookies.append(c)
+            return cookies
+        except Exception:
+            pass
+
+    # Tenta interpretar como formato Netscape (separado por tabulação)
+    for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        http_only = False
+        if line.startswith("#HttpOnly_"):
+            line = line[10:]
+            http_only = True
+        elif line.startswith("#"):
+            continue
+
+        parts = line.split("\t")
+        if len(parts) >= 7:
+            domain, flag, path_val, secure, expiration, name, value = parts[:7]
+            try:
+                exp_float = float(expiration) if expiration != "0" else None
+            except ValueError:
+                exp_float = None
+
+            c = {
+                "name": name,
+                "value": value,
+                "domain": domain,
+                "path": path_val,
+                "httpOnly": http_only,
+                "secure": secure.upper() == "TRUE",
+            }
+            if exp_float:
+                c["expires"] = exp_float
+            cookies.append(c)
+
+    return cookies
+
 
 

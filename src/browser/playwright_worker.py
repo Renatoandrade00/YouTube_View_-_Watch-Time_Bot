@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from pathlib import Path
 from typing import Dict, Any, Optional
 from playwright.async_api import async_playwright, Playwright, Browser, BrowserContext
 
@@ -125,11 +126,35 @@ class PlaywrightWorker:
 
         browser = await self._ensure_browser()
 
-        context: BrowserContext = await browser.new_context(
-            user_agent=get_random_user_agent(),
-            viewport=get_random_viewport(),
-            locale="pt-BR",
-        )
+        context_kwargs: Dict[str, Any] = {
+            "user_agent": get_random_user_agent(),
+            "viewport": get_random_viewport(),
+            "locale": "pt-BR",
+        }
+
+        profile_state_path: Optional[Path] = None
+        if getattr(self.config, "use_persistent_profiles", False):
+            profiles_dir = Path(getattr(self.config, "profiles_dir", "profiles"))
+            worker_profile_dir = profiles_dir / f"worker_{self.worker_id}"
+            worker_profile_dir.mkdir(parents=True, exist_ok=True)
+            profile_state_path = worker_profile_dir / "storage_state.json"
+            if profile_state_path.exists() and profile_state_path.stat().st_size > 0:
+                context_kwargs["storage_state"] = str(profile_state_path)
+                logger.info(f"[Worker {self.worker_id}] 📂 Perfil persistente carregado com sucesso ({profile_state_path.name}).")
+
+        context: BrowserContext = await browser.new_context(**context_kwargs)
+
+        # Injeta cookies externos de arquivo se configurado
+        cookies_file = getattr(self.config, "cookies_file", None)
+        if cookies_file and (not profile_state_path or not profile_state_path.exists()):
+            from src.utils.helpers import parse_cookies_file
+            cookies_to_add = parse_cookies_file(cookies_file, worker_id=self.worker_id)
+            if cookies_to_add:
+                try:
+                    await context.add_cookies(cookies_to_add)
+                    logger.info(f"[Worker {self.worker_id}] 🍪 {len(cookies_to_add)} cookies injetados a partir de {cookies_file}.")
+                except Exception as e:
+                    logger.warning(f"[Worker {self.worker_id}] ⚠️ Falha ao injetar cookies: {e}")
 
         try:
             # Economia de tráfego do proxy: intercepta e bloqueia imagens, fontes, trackers e domínios de anúncios
@@ -239,7 +264,14 @@ class PlaywrightWorker:
                 "error_message": str(e),
             }
         finally:
+            if profile_state_path:
+                try:
+                    await context.storage_state(path=str(profile_state_path))
+                    logger.debug(f"[Worker {self.worker_id}] 💾 Perfil persistente salvo em disco ({profile_state_path.name}).")
+                except Exception as e:
+                    logger.debug(f"[Worker {self.worker_id}] Falha ao salvar perfil persistente: {e}")
             try:
                 await context.close()
             except Exception:
                 pass
+

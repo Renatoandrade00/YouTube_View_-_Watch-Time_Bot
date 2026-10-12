@@ -40,6 +40,11 @@ proxies.txt
 .playwright/
 test-results/
 playwright-report/
+profiles/
+cookies.json
+cookies/
+storage_state/
+*.cookie
 
 # Logs & Metrics
 *.log

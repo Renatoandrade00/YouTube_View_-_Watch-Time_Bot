@@ -176,6 +176,15 @@
                             <span class="toggle-label">Superar 'Continuar Assistindo'</span>
                         </label>
                         <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-persistent-profiles">
+                            <span class="slider"></span>
+                            <span class="toggle-label">Perfis Persistentes (Salvar Sessão/Login)</span>
+                        </label>
+                        <div id="cookies-details-wrap" style="padding-left: 28px; margin-top: -4px; margin-bottom: 6px;">
+                            <input type="text" id="cookies-file-input" placeholder="Arquivo de Cookies (ex: cookies.json)" style="font-size: 0.8rem; padding: 6px 10px; width: 100%; border-radius: 6px; background: rgba(10,14,23,0.7); border: 1px solid var(--border-color); color: var(--text-primary);">
+                            <small class="hint" style="display: block; margin-top: 2px;">Opcional: Injeta cookies exportados (JSON ou Netscape) na inicialização.</small>
+                        </div>
+                        <label class="toggle-switch">
                             <input type="checkbox" id="toggle-headless" checked>
                             <span class="slider"></span>
                             <span class="toggle-label">Modo Segundo Plano (Headless)</span>

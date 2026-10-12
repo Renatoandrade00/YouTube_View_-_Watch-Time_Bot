@@ -22,6 +22,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const toggleMicroInteractions = document.getElementById("toggle-micro-interactions");
     const toggleSkipAds = document.getElementById("toggle-skip-ads");
     const toggleAutoContinue = document.getElementById("toggle-auto-continue");
+    const togglePersistentProfiles = document.getElementById("toggle-persistent-profiles");
+    const cookiesFileInput = document.getElementById("cookies-file-input");
     const toggleHeadless = document.getElementById("toggle-headless");
     const toggleMute = document.getElementById("toggle-mute");
 
@@ -485,6 +487,8 @@ document.addEventListener("DOMContentLoaded", () => {
             proxies: updateProxiesCount(),
             proxy_session_template: (proxyTemplateInput && proxyTemplateInput.value.trim()) ? proxyTemplateInput.value.trim() : null,
             proxy_low_bandwidth: toggleProxyLowBw ? toggleProxyLowBw.checked : true,
+            use_persistent_profiles: togglePersistentProfiles ? togglePersistentProfiles.checked : false,
+            cookies_file: (cookiesFileInput && cookiesFileInput.value.trim()) ? cookiesFileInput.value.trim() : null,
         };
 
 

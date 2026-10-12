@@ -119,6 +119,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--proxy-session-template", type=str, default=None, help="Template de sessão de proxy (ex: http://user-session-{worker_id}:pass@host:port)")
 
+    # Argumentos de Perfis e Cookies
+    parser.add_argument(
+        "--persistent-profiles",
+        dest="use_persistent_profiles",
+        action="store_true",
+        default=None,
+        help="Salvar perfis/cookies de cada worker em disco para sessões contínuas e maior retenção",
+    )
+    parser.add_argument("--profiles-dir", type=str, default=None, help="Diretório para armazenamento dos perfis (padrão: profiles)")
+    parser.add_argument("--cookies-file", type=str, default=None, help="Caminho para arquivo de cookies JSON ou Netscape (ex: cookies.json)")
+
     # Argumentos do Modo Visual Web
     parser.add_argument("--web", "--gui", dest="web_mode", action="store_true", default=False, help="Iniciar painel de controle visual no navegador")
     parser.add_argument("--port", type=int, default=8000, help="Porta para o servidor web (padrão: 8000)")
@@ -185,6 +196,9 @@ async def main_async() -> None:
         "proxies_file": args.proxies_file,
         "proxy_low_bandwidth_mode": args.proxy_low_bandwidth_mode,
         "proxy_session_template": args.proxy_session_template,
+        "use_persistent_profiles": args.use_persistent_profiles,
+        "profiles_dir": args.profiles_dir,
+        "cookies_file": args.cookies_file,
     }
 
     try:

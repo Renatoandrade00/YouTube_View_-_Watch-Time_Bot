@@ -79,6 +79,8 @@ class StartBotRequest(BaseModel):
     proxies: List[str] = Field(default_factory=list)
     proxy_session_template: Optional[str] = Field(default=None)
     proxy_low_bandwidth: bool = Field(default=True)
+    use_persistent_profiles: bool = Field(default=False)
+    cookies_file: Optional[str] = Field(default=None)
 
 
 @app.get("/")
@@ -220,6 +222,8 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
         proxies_list=cleaned_proxies,
         proxy_session_template=req.proxy_session_template,
         proxy_low_bandwidth_mode=req.proxy_low_bandwidth,
+        use_persistent_profiles=req.use_persistent_profiles,
+        cookies_file=req.cookies_file,
     )
 
     tracker = MetricsTracker()

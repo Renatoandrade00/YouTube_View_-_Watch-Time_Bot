@@ -1,8 +1,8 @@
 # Memória de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de Atualização:** Outubro de 2026  
-> **Versão do Projeto:** 2.1 (CLI + Web Hub + SQLite History)  
-> **Status dos Testes:** 45/45 testes passando (100% de sucesso)  
+> **Versão do Projeto:** 2.2 (CLI + Web Hub + SQLite + Session Profiles)  
+> **Status dos Testes:** 51/51 testes passando (100% de sucesso)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
 
 ---
@@ -199,5 +199,9 @@ flowchart TD
   - Tabela responsiva com detalhamento de rodadas e modal de auditoria por sessão de vídeo individual.
   - Endpoints REST completos: `GET /api/history`, `GET /api/history/{run_id}`, `DELETE /api/history/{run_id}` e `DELETE /api/history`.
   - Proteção de privacidade: `bot_history.db` e `*.db` estritamente ignorados no `.gitignore`.
-- [ ] **Suporte a Cookies de Sessão / Perfis Salvos:**
-  - Opção para carregar diretórios de perfis do usuário (`user_data_dir`) com contas Google logadas, elevando a confiabilidade das visualizações contabilizadas.
+- [x] **Suporte a Cookies de Sessão & Perfis Persistentes — CONCLUÍDO:**
+  - Armazenamento e isolamento de perfis persistentes por worker (`profiles/worker_{id}/storage_state.json`) com persistência automática de cookies, histórico e preferências do player.
+  - Parser universal de cookies (`parse_cookies_file` em `src/utils/helpers.py`) suportando formato JSON (Playwright/Cookie-Editor), Netscape (tab-separated) e arquivos dedicados por worker (`worker_{id}.json`).
+  - Injeção e salvamento dinâmico sem abrir mão do reuso de instâncias de Chromium em execução contínua.
+  - Controle integrado via CLI (`--persistent-profiles`, `--cookies-file`) e Web Dashboard (toggle visual com campo de arquivo de cookies).
+  - Arquivo modelo de referência `cookies.example.json` adicionado ao projeto e exclusão rígida de credenciais/sessões no `.gitignore`.

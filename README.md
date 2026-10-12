@@ -45,6 +45,10 @@ Automação assíncrona em Python com **Playwright** para simulação realista d
   - Detecção contínua e clique no diálogo "Continuar assistindo?".
   - Bypass de banners de consentimento de cookies da Google/YouTube.
   - Pulo automático de anúncios ("Skip Ad").
+- **Perfis Persistentes & Injeção de Cookies de Sessão:**
+  - Suporte a perfis de usuário persistentes por worker (`profiles/worker_{id}/storage_state.json`), preservando login no Google/YouTube, cookies, histórico e preferências de reprodução.
+  - Injeção flexível de arquivos de cookies (`--cookies-file` / `cookies.json`) nos formatos padrão JSON (Playwright/Cookie-Editor) e Netscape (tab-separated), com suporte a cookies específicos por worker (`worker_{id}.json`).
+  - Reduz drasticamente o descarte de visualizações pelo algoritmo do YouTube ao simular tráfego de usuários com histórico orgânico.
 - **Histórico e Persistência de Rodadas (SQLite):**
   - Armazenamento automático e local de cada rodada finalizada (`runs`) e de suas sessões de vídeo individuais (`run_sessions`) em banco SQLite leve (zero dependências externas).
   - Aba dedicada no Dashboard Web ("📜 Histórico de Rodadas") com KPIs consolidados (total de rodadas, horas acumuladas, taxa de sucesso, popups superados).
@@ -168,16 +172,17 @@ python -m src.main --urls-file urls.txt --workers 5 --headless
 ├── config.example.yaml        # Modelo de configuração do bot
 ├── env.example                # Modelo de variáveis de ambiente
 ├── proxies.example.txt        # Modelo de lista de proxies
+├── cookies.example.json       # Modelo de importação de cookies de sessão
 ├── urls.txt                   # Lista padrão de URLs alvo
 ├── iniciar_painel.bat         # Launcher rápido do painel web para Windows
 ├── requirements.txt           # Dependências do projeto
-├── tests/                     # Suíte de testes unitários e de integração (45 testes)
+├── tests/                     # Suíte de testes unitários e de integração (51 testes)
 └── src/
     ├── main.py                # Ponto de entrada CLI e inicialização do servidor Web
     ├── config.py              # Validação e hierarquia de configurações (Pydantic)
     ├── orchestrator.py        # Orquestrador assíncrono, pool de workers e rotação de proxies
     ├── browser/
-    │   ├── playwright_worker.py  # Gerenciamento de instâncias e contextos Playwright
+    │   ├── playwright_worker.py  # Gerenciamento de instâncias, storage_state e cookies
     │   └── fingerprint.py        # Injeção de perfis anti-fingerprint (WebGL, Canvas, Audio)
     ├── youtube/
     │   ├── player.py             # Reprodução, monitoramento, detecção de CAPTCHA e 144p
@@ -191,7 +196,7 @@ python -m src.main --urls-file urls.txt --workers 5 --headless
     │   └── static/               # Frontend SPA (Vanilla JS + Glassmorphism UI)
     └── utils/
         ├── db.py                 # Persistência e consultas em SQLite (runs e run_sessions)
-        ├── helpers.py            # Rotação de sessão de proxy e mascaramento seguro
+        ├── helpers.py            # Rotação de sessão, mascaramento e parser de cookies (JSON/Netscape)
         └── logger.py             # Logging estruturado e gravação de métricas JSONL
 ```
 
@@ -199,7 +204,7 @@ python -m src.main --urls-file urls.txt --workers 5 --headless
 
 ## 🧪 Testes Automatizados
 
-O projeto conta com uma suíte de testes automatizados com cobertura completa para validação de regras de configuração, injeção de fingerprints, rotação de proxies, quarentena, persistência de Chromium, parser de playlists/canais e histórico SQLite (**45 testes automatizados**):
+O projeto conta com uma suíte de testes automatizados com cobertura completa para validação de regras de configuração, injeção de fingerprints, rotação de proxies, quarentena, persistência de Chromium, parser de playlists/canais, histórico SQLite e perfis/cookies persistentes (**51 testes automatizados**):
 
 ```bash
 pytest

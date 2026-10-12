@@ -1,0 +1,32 @@
+[
+  {
+    "name": "LOGIN_INFO",
+    "value": "EXEMPLO_TOKEN_LOGIN_INFO",
+    "domain": ".youtube.com",
+    "path": "/",
+    "expires": 1893456000,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "SID",
+    "value": "EXEMPLO_TOKEN_GOOGLE_SID",
+    "domain": ".youtube.com",
+    "path": "/",
+    "expires": 1893456000,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "PREF",
+    "value": "f6=40000000&tz=America.Sao_Paulo",
+    "domain": ".youtube.com",
+    "path": "/",
+    "expires": 1893456000,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  }
+]

@@ -47,6 +47,10 @@ class BotConfig(BaseModel):
     proxy_low_bandwidth_mode: bool = Field(default=True, description="Economia de banda: 144p e bloqueio de imagens desnecessárias para poupar tráfego do proxy")
     proxy_quarantine_minutes: float = Field(default=30.0, ge=1.0, description="Tempo em minutos que um proxy bloqueado permanece em quarentena antes de ser elegível novamente")
 
+    use_persistent_profiles: bool = Field(default=False, description="Persistir perfis de usuário/cookies dos workers em disco para maior retenção")
+    profiles_dir: str = Field(default="profiles", description="Diretório onde os perfis isolados de cada worker serão armazenados")
+    cookies_file: Optional[str] = Field(default=None, description="Caminho para arquivo de cookies JSON ou Netscape a ser injetado nos navegadores")
+
     @field_validator("max_watch")
     @classmethod
     def validate_watch_range(cls, v: int, info) -> int:
