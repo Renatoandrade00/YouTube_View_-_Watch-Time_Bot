@@ -204,9 +204,13 @@ async def main_async() -> None:
                 webbrowser.open(web_url)
             threading.Thread(target=_open_browser, daemon=True).start()
 
-        uvicorn_config = uvicorn.Config("src.web.app:app", host=args.host, port=args.port, log_level="warning")
-        server = uvicorn.Server(uvicorn_config)
-        await server.serve()
+        try:
+            uvicorn_config = uvicorn.Config("src.web.app:app", host=args.host, port=args.port, log_level="warning")
+            server = uvicorn.Server(uvicorn_config)
+            await server.serve()
+        except (OSError, SystemExit) as e:
+            console.print(f"\n[bold red]❌ Falha ao iniciar na porta {args.port}:[/bold red] Porta já está em uso por outro processo.")
+            console.print("[yellow]💡 Solução: Encerre instâncias anteriores do bot ou use outra porta (ex: --port 8080).[/yellow]\n")
         return
 
     min_watch = args.min_watch
