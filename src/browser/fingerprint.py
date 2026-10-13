@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from dataclasses import dataclass
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 
 GPU_PROFILES = [
@@ -37,6 +38,17 @@ GPU_PROFILES = [
     },
 ]
 
+# Plataformas reais por frequência de uso (Win32 é a mais comum)
+PLATFORM_PROFILES: List[str] = ["Win32", "Win32", "Win32", "MacIntel", "Linux x86_64"]
+
+# Viewports comuns (inner size); outerHeight = inner + chrome UI (~88px)
+VIEWPORT_PROFILES = [
+    {"inner_w": 1280, "inner_h": 720},
+    {"inner_w": 1366, "inner_h": 768},
+    {"inner_w": 1440, "inner_h": 900},
+    {"inner_w": 1920, "inner_h": 1080},
+]
+
 
 @dataclass
 class FingerprintProfile:
@@ -48,17 +60,35 @@ class FingerprintProfile:
     gpu_renderer: str
     canvas_noise_seed: float
     audio_noise_seed: float
+    # Novos campos para stealth expandido
+    outer_width: int
+    outer_height: int
+    platform: str
 
 
 def generate_fingerprint_profile(worker_id: int) -> FingerprintProfile:
-    """Gera um perfil determinístico ou variado para um worker específico."""
-    # Determinismo baseado no worker_id com variação de hardware realista
-    rnd = random.Random(worker_id * 1000 + 42)
+    """
+    Gera um perfil de hardware variado por worker e por faixa horária.
+    O seed varia a cada hora, garantindo que o mesmo worker não mantenha
+    o mesmo fingerprint entre rodadas distintas — o que seria detectável
+    pelo YouTube como padrão de automação.
+    """
+    hour_bucket = int(time.time() // 3600)
+    rnd = random.Random(worker_id * 1000 + hour_bucket)
+
     gpu = rnd.choice(GPU_PROFILES)
     concurrency = rnd.choice([4, 6, 8, 12, 16])
     memory = rnd.choice([8, 16, 32])
     canvas_seed = rnd.uniform(0.0001, 0.0009)
     audio_seed = rnd.uniform(0.000001, 0.000009)
+    platform = rnd.choice(PLATFORM_PROFILES)
+
+    vp = rnd.choice(VIEWPORT_PROFILES)
+    inner_w = vp["inner_w"]
+    inner_h = vp["inner_h"]
+    # outerHeight simula barra de título + abas + barra de endereços do Chrome (~88–100px)
+    outer_h = inner_h + rnd.randint(85, 102)
+    outer_w = inner_w  # outerWidth geralmente igual ao innerWidth
 
     return FingerprintProfile(
         worker_id=worker_id,
@@ -68,13 +98,18 @@ def generate_fingerprint_profile(worker_id: int) -> FingerprintProfile:
         gpu_renderer=gpu["renderer"],
         canvas_noise_seed=canvas_seed,
         audio_noise_seed=audio_seed,
+        outer_width=outer_w,
+        outer_height=outer_h,
+        platform=platform,
     )
 
 
 def build_stealth_injection_script(profile: FingerprintProfile) -> str:
     """
-    Gera o script JavaScript injetado antes de qualquer página carregar,
-    randomizando Canvas, WebGL, AudioContext e mascarando traços de automação.
+    Gera o script JavaScript injetado antes de qualquer página carregar.
+    Cobre: webdriver, hardwareConcurrency, deviceMemory, WebGL, Canvas,
+    AudioContext, navigator.plugins, navigator.languages, navigator.platform,
+    outerWidth/outerHeight, screen.colorDepth/pixelDepth.
     """
     profile_data = {
         "concurrency": profile.hardware_concurrency,
@@ -83,6 +118,9 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
         "renderer": profile.gpu_renderer,
         "canvasNoise": profile.canvas_noise_seed,
         "audioNoise": profile.audio_noise_seed,
+        "outerWidth": profile.outer_width,
+        "outerHeight": profile.outer_height,
+        "platform": profile.platform,
     }
 
     return f"""(() => {{
@@ -176,5 +214,50 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
                     }}
                 }};
             }}
+        }} catch(e) {{}}
+
+        // 5. Stealth expandido: plugins, languages, platform, outerWidth/Height, colorDepth
+        try {{
+            // navigator.plugins vazio é o sinal mais imediato de browser headless.
+            // Simula os 3 plugins padrão que todo Chrome real possui.
+            const fakePlugins = [
+                {{ name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format', length: 1 }},
+                {{ name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '', length: 1 }},
+                {{ name: 'Native Client', filename: 'internal-nacl-plugin', description: '', length: 2 }},
+            ];
+            Object.defineProperty(navigator, 'plugins', {{
+                get: () => fakePlugins,
+                configurable: true
+            }});
+            Object.defineProperty(navigator, 'mimeTypes', {{
+                get: () => [{{ type: 'application/pdf', suffixes: 'pdf', description: '' }}],
+                configurable: true
+            }});
+
+            // Usuários reais têm múltiplos idiomas configurados
+            Object.defineProperty(navigator, 'languages', {{
+                get: () => ['pt-BR', 'pt', 'en-US', 'en'],
+                configurable: true
+            }});
+
+            // Plataforma consistente com o User-Agent
+            Object.defineProperty(navigator, 'platform', {{
+                get: () => config.platform,
+                configurable: true
+            }});
+
+            // outerWidth/outerHeight em headless = 0; em browser real = inner + chrome UI
+            Object.defineProperty(window, 'outerWidth', {{
+                get: () => config.outerWidth,
+                configurable: true
+            }});
+            Object.defineProperty(window, 'outerHeight', {{
+                get: () => config.outerHeight,
+                configurable: true
+            }});
+
+            // Profundidade de cor — sempre 24 em monitores modernos
+            Object.defineProperty(screen, 'colorDepth', {{ get: () => 24, configurable: true }});
+            Object.defineProperty(screen, 'pixelDepth', {{ get: () => 24, configurable: true }});
         }} catch(e) {{}}
     }})();"""

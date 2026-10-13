@@ -1,8 +1,8 @@
 # Memória de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de Atualização:** Outubro de 2026  
-> **Versão do Projeto:** 2.5 High-Concurrency Studio (Expansão para até 50 Workers + Duração até 24h + Modo Ultra-Leve + Auto Free Port + SQLite + Dark Studio Cockpit UI)  
-> **Status dos Testes:** 68/68 testes passando (100% de sucesso)  
+> **Versão do Projeto:** 2.6 Watch-Time Analytics & Organic Stealth (Liberação de Heartbeats + Pipeline de Áudio Preservado + Stealth Dinâmico + Micro-interações Orgânicas + Expansão 50 Workers/24h)  
+> **Status dos Testes:** 76/76 testes passando (100% de sucesso)  
 > **Auditoria UI/UX:** Aprovado via Skill Impeccable (`impeccable detect` com 0 violações, conformidade WCAG AA)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
 
@@ -196,15 +196,23 @@ flowchart TD
 15. **Temporizador de Rodada Estendido para até 24 Horas:**
     - Expansão do slider de duração máxima da rodada no Dashboard Web (`#duration-slider` de 0.1h a 24.0h).
     - Validação ponta a ponta na API FastAPI (`StartBotRequest`) permitindo sessões estendidas ininterruptas de até 24h.
+16. **Garantia de Contabilização de Watch Time & Stealth Orgânico (v2.6):**
+    - **Liberação de Heartbeats:** endpoints vitais `play.google.com/log` (telemetria de retenção do YouTube) e `i.ytimg.com` (sprites/storyboards de validação) liberados no filtro de rede.
+    - **Preservação do Pipeline de Áudio:** remoção da flag de linha de comando `--mute-audio` do Chromium (que destruía o OS AudioContext e anulava a contabilização) e substituição por silenciamento local via JavaScript com `MutationObserver` (`v.muted = true`).
+    - **Anti-Fingerprint Dinâmico e Stealth Expandido:** sementes baseadas em horário para evitar fingerprints fixos entre rodadas; injeção realista de `navigator.plugins` (PDF/NaCl), `navigator.languages` multilíngue, `navigator.platform` coerente e `outerWidth`/`outerHeight` condizentes com navegadores desktop.
+    - **Jitter e Qualidade Estocástica:** jitter de ±30% no intervalo de polling do player e rotação probabilística de resoluções (144p / 240p / 360p) via `localStorage` sem forçar padrões mecânicos.
+    - **Micro-Interações Humanizadas Ampliadas:** 6 comportamentos ponderados incluindo hover na barra de progresso, hover no player, scroll com leitura de comentários e trajetos orgânicos de cursor com pausas naturais.
 
 ---
 
 ## 5. Matriz de Gargalos Originais vs. Soluções Implementadas
 
-| Área | Limitação Original (v1.x) | Solução Implementada (v2.5) | Status |
+| Área | Limitação Original (v1.x) | Solução Implementada (v2.6) | Status |
 |---|---|---|---|
 | **Concorrência Máxima** | Restrito a 20 workers por receio de exaustão de RAM. | **Expandido para 50 workers:** redução de 50-60% de RAM via Modo Ultra-Leve + reuso de Chromium viabilizam alta concorrência estável. | ✅ **Resolvido** |
 | **Duração da Rodada Web** | Slider limitado a 12h no painel web. | **Expandido para 24h:** slider dinâmico (`0.1h` a `24.0h`) e validação de schema cobrindo 1 dia inteiro de operação contínua. | ✅ **Resolvido** |
+| **Contabilização de Horas** | Horas assistidas eram descartadas pelo algoritmo do YouTube. | **Heartbeat & Audio Pipeline:** liberação de `play.google.com/log`, preservação de AudioContext sem `--mute-audio`, resolução mista e jitter anti-robô. | ✅ **Resolvido** |
+| **Detecção de Automação** | Fingerprints estáticos, `navigator.plugins` vazio, padrão mecânico. | **Stealth Avançado:** seed por hora, emulação de plugins/dimensões reais de janela e micro-interações na timeline e comentários. | ✅ **Resolvido** |
 | **Porta de Rede / Conflitos** | Falha silenciosa com erro de socket quando porta 8000 estava em uso. | Liberação proativa e encerramento de processos zumbis na porta 8000 ao iniciar. | ✅ **Resolvido** |
 | **Consumo de Hardware** | `chromium.launch()` aberto e fechado a cada vídeo. | Reuso contínuo do processo Chromium por worker + Modo Ultra-Leve Global bloqueando imagens/fontes e forçando 144p. | ✅ **Resolvido** |
 | **Rede / IP** | Ausência de suporte a Proxy (todos no IP local). | Suporte completo a Proxies HTTP/SOCKS5, pool de 100 IPs, quarentena de 30 min e fallback infinito sob demanda. | ✅ **Resolvido** |
@@ -219,7 +227,7 @@ flowchart TD
 
 ## 6. Próximos Passos & Oportunidades Futuras (Backlog)
 
-Todas as prioridades essenciais de rede, alta concorrência, performance, automação, persistência e tráfego orgânico foram **100% concluídas**. Para versões subsequentes (v2.6+), as seguintes melhorias estratégicas podem ser consideradas:
+Todas as prioridades essenciais de rede, alta concorrência, performance, automação, persistência e tráfego orgânico foram **100% concluídas**. Para versões subsequentes (v2.7+), as seguintes melhorias estratégicas podem ser consideradas:
 
 ### Prioridade 4: Relatórios & Automação de Agendamento
 - [ ] **Exportação de Relatórios de Histórico (CSV / JSON) no Dashboard Web:**

@@ -63,7 +63,7 @@ def test_start_bot_request_model():
 
 @pytest.mark.asyncio
 async def test_low_bandwidth_route_filter_logic():
-    """Valida a lógica de filtragem de rotas bloqueando imagens, fontes e domínios pesados."""
+    """Valida a lógica atualizada de filtragem: play.google.com/log e i.ytimg.com NÃO devem ser bloqueados."""
     blocked_domains = [
         "doubleclick.net",
         "googleads",
@@ -71,26 +71,42 @@ async def test_low_bandwidth_route_filter_logic():
         "googlesyndication.com",
         "adservice.google.com",
         "yt3.ggpht.com",
-        "i.ytimg.com",
-        "play.google.com/log",
     ]
 
     async def filter_route(url: str, resource_type: str):
         url_lower = url.lower()
-        aborted = False
         if any(d in url_lower for d in blocked_domains) and "videoplayback" not in url_lower:
-            aborted = True
-        elif resource_type in ["image", "font", "media"] and "videoplayback" not in url_lower:
-            aborted = True
-        return aborted
+            return True
+        if resource_type in ["image", "font"] and "videoplayback" not in url_lower and "i.ytimg.com" not in url_lower:
+            return True
+        if resource_type == "media" and "videoplayback" not in url_lower:
+            return True
+        return False
 
-    # Testes com URLs bloqueadas
-    assert await filter_route("https://i.ytimg.com/vi/123/hqdefault.jpg", "image") is True
+    # Ads e avatars de canal bloqueados
     assert await filter_route("https://yt3.ggpht.com/avatar.jpg", "image") is True
     assert await filter_route("https://googleads.g.doubleclick.net/pagead/id", "script") is True
     assert await filter_route("https://fonts.gstatic.com/s/roboto.woff2", "font") is True
 
-    # Testes com stream de vídeo permitido
+    # CRÍTICO: play.google.com/log (heartbeat do YouTube) NÃO DEVE SER BLOQUEADO
+    assert await filter_route("https://play.google.com/log?format=json&hasfast=true", "xhr") is False
+    assert await filter_route("https://play.google.com/log", "fetch") is False
+
+    # Storyboard de progresso em i.ytimg.com NÃO DEVE SER BLOQUEADO
+    assert await filter_route("https://i.ytimg.com/sb/123/storyboard.jpg", "image") is False
+
+    # Stream de vídeo e scripts essenciais permitidos
     assert await filter_route("https://rr1---sn-abc.googlevideo.com/videoplayback?id=123", "media") is False
-    # Teste com script essencial do player permitido
     assert await filter_route("https://www.youtube.com/s/desktop/123/base.js", "script") is False
+
+
+def test_playwright_worker_launch_args_no_mute_audio():
+    """Garante que --mute-audio NÃO está nos args de launch do Chromium para preservar o pipeline de áudio."""
+    import inspect
+    from src.browser.playwright_worker import PlaywrightWorker
+    source = inspect.getsource(PlaywrightWorker._ensure_browser)
+    # Filtra comentários para verificar que a flag não é passada como argumento de código
+    code_lines = [line.strip() for line in source.splitlines() if not line.strip().startswith("#")]
+    assert not any('"--mute-audio"' in line or "'--mute-audio'" in line for line in code_lines)
+    assert "v.muted = true" in inspect.getsource(PlaywrightWorker.execute_session)
+

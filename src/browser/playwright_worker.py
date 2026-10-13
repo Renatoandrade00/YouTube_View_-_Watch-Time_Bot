@@ -60,8 +60,10 @@ class PlaywrightWorker:
                 "--disable-renderer-backgrounding",
                 "--autoplay-policy=no-user-gesture-required",
             ]
-            if self.config.mute_audio:
-                browser_args.append("--mute-audio")
+            # NOTA: --mute-audio NÃO é adicionado ao launch do Chromium.
+            # O silenciamento é feito via JS (video.muted = true) para preservar
+            # o pipeline de áudio do OS — o YouTube usa AudioContext como sinal
+            # de engajamento real para contabilizar o watch time corretamente.
 
             proxy_dict = parse_playwright_proxy(self.proxy_url) if self.proxy_url else None
             proxy_desc = format_proxy_display(self.proxy_url) if self.proxy_url else "Conexão Direta (Local)"
@@ -159,16 +161,28 @@ class PlaywrightWorker:
         try:
             # Modo Ultra-Leve / Economia de tráfego: intercepta e bloqueia imagens, fontes, trackers e anúncios
             if getattr(self.config, "block_heavy_media", True) or self.config.proxy_low_bandwidth_mode:
-                # Pré-configura localStorage do YouTube para forçar 144p (tiny) antes mesmo do player carregar
-                await context.add_init_script("""() => {
-                    try {
-                        localStorage.setItem('yt-player-quality', JSON.stringify({
-                            data: '{"quality":144,"previousQuality":144}',
-                            expiration: Date.now() + 86400000000
-                        }));
-                    } catch(e) {}
-                }""")
+                # Qualidade de vídeo variada entre 144p, 240p e 360p para parecer orgânica.
+                # 144p com maior probabilidade para economizar banda, mas não sempre (padrão suspeito).
+                quality_options = ["tiny", "small", "medium"]  # 144p, 240p, 360p
+                quality_weights = [0.50, 0.35, 0.15]
+                chosen_quality = random.choices(quality_options, weights=quality_weights, k=1)[0]
+                logger.debug(f"[Worker {self.worker_id}] 🎬 Qualidade de vídeo selecionada: {chosen_quality} (144p/240p/360p sortido)")
 
+                await context.add_init_script(f"""() => {{
+                    try {{
+                        const q = '{chosen_quality}';
+                        localStorage.setItem('yt-player-quality', JSON.stringify({{
+                            data: JSON.stringify({{quality: q, previousQuality: q}}),
+                            expiration: Date.now() + 86400000000
+                        }}));
+                    }} catch(e) {{}}
+                }}""")
+
+                # BLOCKED_DOMAINS: apenas trackers e anúncios.
+                # IMPORTANTE: play.google.com/log e i.ytimg.com NÃO são bloqueados —
+                # play.google.com/log é o endpoint de heartbeat de reprodução pelo qual o
+                # YouTube registra o watch time; i.ytimg.com serve storyboard sprites usados
+                # para validação de progresso real. Bloqueá-los impede o registro no Analytics.
                 BLOCKED_DOMAINS = [
                     "doubleclick.net",
                     "googleads",
@@ -176,8 +190,8 @@ class PlaywrightWorker:
                     "googlesyndication.com",
                     "adservice.google.com",
                     "yt3.ggpht.com",
-                    "i.ytimg.com",
-                    "play.google.com/log",
+                    # "i.ytimg.com",        # NÃO bloquear: storyboard validation
+                    # "play.google.com/log", # NÃO bloquear: heartbeat de watch time
                 ]
 
                 async def _low_bandwidth_filter(route):
@@ -185,13 +199,19 @@ class PlaywrightWorker:
                         req = route.request
                         url_lower = req.url.lower()
 
-                        # Bloqueia domínios de anúncios, thumbnails pesados e telemetria
+                        # Bloqueia domínios de anúncios e telemetria de ads
                         if any(domain in url_lower for domain in BLOCKED_DOMAINS) and "videoplayback" not in url_lower:
                             await route.abort()
                             return
 
-                        # Bloqueia imagens, fontes e mídias estáticas secundárias
-                        if req.resource_type in ["image", "font", "media"] and "videoplayback" not in url_lower:
+                        # Bloqueia imagens e fontes estáticas secundárias
+                        # Exceção: i.ytimg.com pode servir storyboard (resource_type=image), então é permitido
+                        if req.resource_type in ["image", "font"] and "videoplayback" not in url_lower and "i.ytimg.com" not in url_lower:
+                            await route.abort()
+                            return
+
+                        # Bloqueia media que não seja o stream de vídeo real
+                        if req.resource_type == "media" and "videoplayback" not in url_lower:
                             await route.abort()
                             return
                     except Exception:
@@ -202,6 +222,22 @@ class PlaywrightWorker:
                         pass
 
                 await context.route("**/*", _low_bandwidth_filter)
+
+            # Silencia o vídeo via JS com MutationObserver — preserva o pipeline de áudio
+            # do sistema operacional (usado pelo YouTube para confirmar engajamento real),
+            # mas impede que o usuário ouça o som durante a automação.
+            if self.config.mute_audio:
+                await context.add_init_script("""() => {
+                    try {
+                        const muteAll = () => {
+                            document.querySelectorAll('video').forEach(v => { v.muted = true; });
+                        };
+                        muteAll();
+                        const observer = new MutationObserver(muteAll);
+                        observer.observe(document.documentElement, { childList: true, subtree: true });
+                    } catch(e) {}
+                }""")
+                logger.debug(f"[Worker {self.worker_id}] 🔇 Silenciamento via JS ativo (pipeline de áudio do OS preservado).")
 
             # Injeção de perfil anti-fingerprint (Canvas, WebGL, AudioContext, Hardware)
             gpu_desc = "Padrão do Sistema"

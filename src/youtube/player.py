@@ -54,10 +54,11 @@ async def ensure_video_playing(page: Page, mute_audio: bool = True, low_bandwidt
             }}
             if ({str(low_bandwidth).lower()}) {{
                 try {{
-                    const mp = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
-                    if (mp && mp.setPlaybackQualityRange) {{
-                        mp.setPlaybackQualityRange('tiny', 'tiny');
-                    }}
+                    // Não força qualidade via JS — o localStorage pré-configurado pelo contexto
+                    // (varia entre 144p/240p/360p por sessão) tem precedência.
+                    // Forçar sempre 'tiny' aqui sobrescreveria a variação orgânica e
+                    // criaria o padrão anormal de "sempre 144p" detectável pelo YouTube.
+                    void 0;
                 }} catch (e) {{}}
             }}
             if (video.paused) {{
@@ -372,8 +373,10 @@ async def watch_video(
                 f"({accumulated_watch_time / 60:.1f} / {target_watch_seconds / 60:.1f} min)"
             )
 
-        # Intervalo do polling com pequeno jitter para simular comportamento natural
-        sleep_duration = max(1.0, config.poll_interval)
+        # Intervalo do polling com jitter de ±30% para quebrar padrão mecânico detectável
+        base_interval = max(1.0, config.poll_interval)
+        jitter = random.uniform(-base_interval * 0.30, base_interval * 0.50)
+        sleep_duration = max(1.0, base_interval + jitter)
         try:
             from src.web.state import StateManager
             sm = StateManager.get_instance()
