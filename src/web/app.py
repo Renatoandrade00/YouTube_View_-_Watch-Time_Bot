@@ -59,7 +59,7 @@ app.add_middleware(NoCacheMiddleware)
 
 class StartBotRequest(BaseModel):
     urls: List[str] = Field(..., min_length=1, description="Lista de URLs de vídeos do YouTube")
-    workers: int = Field(default=5, ge=1, le=30)
+    workers: int = Field(default=5, ge=1, le=50)
     duration_hours: Optional[float] = Field(default=1.0, ge=0.01, le=24.0)
     continuous: bool = Field(default=True)
     min_watch_minutes: Optional[float] = Field(default=None)

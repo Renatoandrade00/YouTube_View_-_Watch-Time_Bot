@@ -194,7 +194,7 @@ python -m src.main --urls-file urls.txt --workers 3 --search-and-play
 ├── urls.txt                   # Lista padrão de URLs alvo
 ├── iniciar_painel.bat         # Launcher rápido do painel web para Windows
 ├── requirements.txt           # Dependências do projeto
-├── tests/                     # Suíte de testes unitários e de integração (51 testes)
+├── tests/                     # Suíte de testes unitários e de integração (68 testes)
 └── src/
     ├── main.py                # Ponto de entrada CLI e inicialização do servidor Web
     ├── config.py              # Validação e hierarquia de configurações (Pydantic)

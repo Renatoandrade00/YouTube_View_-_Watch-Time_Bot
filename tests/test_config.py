@@ -129,3 +129,13 @@ def test_load_config_env_vars(monkeypatch):
     assert cfg.cookies_file == "env_cookies.json"
 
 
+def test_workers_limit_boundary():
+    # Deve aceitar até 50 workers
+    cfg = BotConfig(workers=50, target_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+    assert cfg.workers == 50
+
+    # Deve rejeitar acima de 50 workers
+    with pytest.raises(ValidationError):
+        BotConfig(workers=51, target_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+

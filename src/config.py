@@ -14,7 +14,7 @@ class BotConfig(BaseModel):
     urls_file: Optional[str] = Field(default=None, description="Caminho para arquivo com lista de URLs")
     urls_list: List[str] = Field(default_factory=list, description="Lista carregada de URLs")
 
-    workers: int = Field(default=2, ge=1, le=20, description="Quantidade de workers simultâneos")
+    workers: int = Field(default=2, ge=1, le=50, description="Quantidade de workers simultâneos")
     total_views: int = Field(default=10, ge=1, description="Total de sessões de visualização a realizar")
 
     min_watch: int = Field(default=45, ge=10, description="Tempo mínimo de exibição por sessão em segundos")

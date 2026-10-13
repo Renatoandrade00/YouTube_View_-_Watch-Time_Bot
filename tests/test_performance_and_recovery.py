@@ -46,6 +46,20 @@ def test_start_bot_request_model():
     assert req_default.block_heavy_media is True
     assert req_default.auto_player_recovery is True
 
+    # Suporte a até 50 workers
+    req_50 = StartBotRequest(
+        urls=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+        workers=50,
+    )
+    assert req_50.workers == 50
+
+    # Rejeição acima de 50 workers
+    with pytest.raises(Exception):
+        StartBotRequest(
+            urls=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+            workers=51,
+        )
+
 
 @pytest.mark.asyncio
 async def test_low_bandwidth_route_filter_logic():

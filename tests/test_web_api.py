@@ -73,3 +73,28 @@ def test_state_manager_worker_proxy_info():
     )
     assert sm.workers[1].proxy_info == "http://user:***@proxy.com:8000"
 
+
+def test_duration_slider_limit_24h_in_html(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'id="duration-slider"' in response.text
+    assert 'max="24"' in response.text
+
+
+def test_start_bot_request_duration_hours_limits():
+    from src.web.app import StartBotRequest
+    # 24h deve ser aceito normalmente
+    req_24 = StartBotRequest(
+        urls=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+        duration_hours=24.0,
+    )
+    assert req_24.duration_hours == 24.0
+
+    # Mais de 24h deve ser rejeitado pela validação
+    with pytest.raises(Exception):
+        StartBotRequest(
+            urls=["https://www.youtube.com/watch?v=dQw4w9WgXcQ"],
+            duration_hours=24.1,
+        )
+
+

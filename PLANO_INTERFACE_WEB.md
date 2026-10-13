@@ -59,7 +59,7 @@ flowchart TD
   - Botão de upload direto de arquivo `.txt` de URLs.
   - Contador dinâmico de vídeos válidos inseridos.
 - **Controles de Concorrência & Duração:**
-  - Seletor de Workers (slider e input numérico de 1 a 20 workers simultâneos).
+  - Seletor de Workers (slider e input numérico de 1 a 50 workers simultâneos).
   - Duração total de execução (em horas ou minutos, ex.: `3.5h` ou contínuo).
   - Intervalo de Watch Time por sessão (Sliders de Tempo Mínimo e Máximo em segundos/minutos).
 - **Toggles e Preferências de Stealth:**
