@@ -296,6 +296,9 @@ document.addEventListener("DOMContentLoaded", () => {
     function getStatusClass(status) {
         if (!status) return "Aguardando";
         if (status.includes("Assistindo")) return "Assistindo";
+        if (status.includes("Buscando") || status.includes("Search")) return "Buscando";
+        if (status.includes("Recuperando")) return "Recuperando";
+        if (status.includes("Novo IP")) return "NovoIP";
         if (status.includes("Navegando")) return "Navegando";
         if (status.includes("Inicia em") || status.includes("Aguardando")) return "Escalonando";
         if (status.includes("Bloqueio") || status.includes("CAPTCHA")) return "Bloqueado";

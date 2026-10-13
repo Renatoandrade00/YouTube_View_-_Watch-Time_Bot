@@ -1,8 +1,9 @@
 # Memória de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de Atualização:** Outubro de 2026  
-> **Versão do Projeto:** 2.4 (Search & Play Orgânico + Ultra-Light + Auto Player Recovery + SQLite + Session Profiles)  
+> **Versão do Projeto:** 2.4 Telemetry Studio (Search & Play Orgânico + Ultra-Light + Auto Recovery + SQLite + Dark Studio Cockpit UI)  
 > **Status dos Testes:** 65/65 testes passando (100% de sucesso)  
+> **Auditoria UI/UX:** Aprovado via Skill Impeccable (`impeccable detect` com 0 violações, conformidade WCAG AA)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
 
 ---
@@ -20,6 +21,7 @@ O **YouTube View & Watch-Time Bot** é um sistema avançado de automação assí
 - **Gerenciamento Inteligente de Proxies:** Pool de 100 proxies residenciais, quarentena automática de IPs bloqueados (30 min) e fallback infinito para rotação contínua.
 - **Modo Ultra-Leve Global:** Bloqueio de imagens, fontes e anúncios, forçando 144p via localStorage e poupando até 50% de CPU/RAM.
 - Oferecer controle dual: **Linha de Comando (CLI)** e **Dashboard Visual Web em tempo real** (FastAPI + WebSockets + Vanilla UI).
+- **Dark Studio Cockpit UI (Redesign Impeccable):** Interface premium com design system de telemetria aeroespacial, tipografia técnica de alta legibilidade (Outfit + JetBrains Mono), contrastes validados WCAG AA e micro-interações estritas (150-220ms).
 - Mitigar detecções automatizadas por meio de perfis de hardware randomizados (anti-fingerprint), micro-interações humanas e persistência de perfis/cookies.
 - Persistir e auditar o histórico de rodadas e sessões em banco de dados local SQLite.
 
@@ -29,6 +31,7 @@ O **YouTube View & Watch-Time Bot** é um sistema avançado de automação assí
 
 ```text
 d:/Projetos/15 - Youtube View Bot/
+├── .agents/skills/impeccable/ # Skill Impeccable instalada localmente no workspace (design playbook + CLI detector)
 ├── config.yaml               # Arquivo padrão de configurações do bot
 ├── config.example.yaml       # Modelo de referência de configuração
 ├── env.example               # Modelo de variáveis de ambiente
@@ -38,7 +41,7 @@ d:/Projetos/15 - Youtube View Bot/
 ├── urls.txt                  # Lista de vídeos alvo padrão (com suporte a "URL | palavra-chave")
 ├── iniciar_painel.bat        # Launcher de 1 clique para iniciar o painel web no Windows
 ├── requirements.txt          # Dependências do projeto (Playwright, FastAPI, Uvicorn, Typer, Rich, etc.)
-├── tests/                    # Suíte de testes automatizados com pytest e pytest-asyncio (63 testes)
+├── tests/                    # Suíte de testes automatizados com pytest e pytest-asyncio (65 testes)
 │   ├── test_config.py
 │   ├── test_fingerprint.py
 │   ├── test_helpers.py
