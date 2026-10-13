@@ -84,3 +84,48 @@ def test_proxy_session_template():
     assert cfg.get_proxy_for_worker(1) == "http://user-session-1:pass@gateway.com:7000"
     assert cfg.get_proxy_for_worker(5) == "http://user-session-5:pass@gateway.com:7000"
 
+
+def test_load_config_yaml_full(tmp_path):
+    yaml_file = tmp_path / "test_config.yaml"
+    yaml_file.write_text(
+        """
+target:
+  url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+stealth:
+  search_and_play: true
+performance:
+  block_heavy_media: false
+  auto_player_recovery: false
+profiles:
+  use_persistent_profiles: true
+  profiles_dir: "custom_profiles"
+  cookies_file: "my_cookies.json"
+""",
+        encoding="utf-8"
+    )
+    cfg = load_config(yaml_path=str(yaml_file))
+    assert cfg.search_and_play is True
+    assert cfg.block_heavy_media is False
+    assert cfg.auto_player_recovery is False
+    assert cfg.use_persistent_profiles is True
+    assert cfg.profiles_dir == "custom_profiles"
+    assert cfg.cookies_file == "my_cookies.json"
+
+
+def test_load_config_env_vars(monkeypatch):
+    monkeypatch.setenv("SEARCH_AND_PLAY", "true")
+    monkeypatch.setenv("BLOCK_HEAVY_MEDIA", "false")
+    monkeypatch.setenv("AUTO_PLAYER_RECOVERY", "false")
+    monkeypatch.setenv("USE_PERSISTENT_PROFILES", "true")
+    monkeypatch.setenv("PROFILES_DIR", "env_profiles")
+    monkeypatch.setenv("COOKIES_FILE", "env_cookies.json")
+
+    cfg = load_config()
+    assert cfg.search_and_play is True
+    assert cfg.block_heavy_media is False
+    assert cfg.auto_player_recovery is False
+    assert cfg.use_persistent_profiles is True
+    assert cfg.profiles_dir == "env_profiles"
+    assert cfg.cookies_file == "env_cookies.json"
+
+

@@ -165,6 +165,25 @@ def load_config(
                     data["log_level"] = yaml_data["logging"].get("level", "INFO")
                     data["save_session_logs"] = yaml_data["logging"].get("save_session_logs", True)
                     data["logs_dir"] = yaml_data["logging"].get("logs_dir", "logs")
+                if "stealth" in yaml_data:
+                    data["enable_anti_fingerprint"] = yaml_data["stealth"].get("enable_anti_fingerprint", True)
+                    data["enable_micro_interactions"] = yaml_data["stealth"].get("enable_micro_interactions", True)
+                    data["min_delay_between_videos"] = yaml_data["stealth"].get("min_delay_between_videos_seconds", 5.0)
+                    data["max_delay_between_videos"] = yaml_data["stealth"].get("max_delay_between_videos_seconds", 15.0)
+                    if "search_and_play" in yaml_data["stealth"]:
+                        data["search_and_play"] = yaml_data["stealth"].get("search_and_play", False)
+                if "performance" in yaml_data:
+                    if "block_heavy_media" in yaml_data["performance"]:
+                        data["block_heavy_media"] = yaml_data["performance"].get("block_heavy_media", True)
+                    if "auto_player_recovery" in yaml_data["performance"]:
+                        data["auto_player_recovery"] = yaml_data["performance"].get("auto_player_recovery", True)
+                if "profiles" in yaml_data:
+                    if "use_persistent_profiles" in yaml_data["profiles"]:
+                        data["use_persistent_profiles"] = yaml_data["profiles"].get("use_persistent_profiles", False)
+                    if "profiles_dir" in yaml_data["profiles"]:
+                        data["profiles_dir"] = yaml_data["profiles"].get("profiles_dir", "profiles")
+                    if "cookies_file" in yaml_data["profiles"]:
+                        data["cookies_file"] = yaml_data["profiles"].get("cookies_file")
                 if "proxy" in yaml_data:
                     data["enable_proxy"] = yaml_data["proxy"].get("enabled", False)
                     data["proxies_file"] = yaml_data["proxy"].get("file", "proxies.txt")
@@ -196,6 +215,12 @@ def load_config(
         "MIN_DELAY_BETWEEN_VIDEOS": ("min_delay_between_videos", float),
         "MAX_DELAY_BETWEEN_VIDEOS": ("max_delay_between_videos", float),
         "WORKER_STAGGER_DELAY": ("worker_stagger_delay", float),
+        "SEARCH_AND_PLAY": ("search_and_play", lambda v: v.lower() in ("true", "1", "yes")),
+        "BLOCK_HEAVY_MEDIA": ("block_heavy_media", lambda v: v.lower() in ("true", "1", "yes")),
+        "AUTO_PLAYER_RECOVERY": ("auto_player_recovery", lambda v: v.lower() in ("true", "1", "yes")),
+        "USE_PERSISTENT_PROFILES": ("use_persistent_profiles", lambda v: v.lower() in ("true", "1", "yes")),
+        "PROFILES_DIR": ("profiles_dir", str),
+        "COOKIES_FILE": ("cookies_file", str),
         "ENABLE_PROXY": ("enable_proxy", lambda v: v.lower() in ("true", "1", "yes")),
         "PROXIES_FILE": ("proxies_file", str),
         "PROXY_LOW_BANDWIDTH": ("proxy_low_bandwidth_mode", lambda v: v.lower() in ("true", "1", "yes")),
