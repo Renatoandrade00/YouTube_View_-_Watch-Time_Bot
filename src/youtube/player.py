@@ -48,6 +48,7 @@ async def ensure_video_playing(page: Page, mute_audio: bool = True, low_bandwidt
         # Primeiro tenta via injeção JS direta no elemento <video> e configuração de bitrate
         result = await page.evaluate(f"""() => {{
             const video = document.querySelector('video');
+            const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
             if (!video) return {{ found: false }};
             if ({str(mute_audio).lower()}) {{
                 // Preserva muted=false com volume sutil para que o beacon /api/stats/watchtime
@@ -57,32 +58,25 @@ async def ensure_video_playing(page: Page, mute_audio: bool = True, low_bandwidt
                     if (video.volume > 0.15) {{ video.volume = 0.05; }}
                 }} catch(e) {{}}
             }}
-            if ({str(low_bandwidth).lower()}) {{
-                try {{
-                    // Não força qualidade via JS — o localStorage pré-configurado pelo contexto
-                    // (varia entre 144p/240p/360p por sessão) tem precedência.
-                    // Forçar sempre 'tiny' aqui sobrescreveria a variação orgânica e
-                    // criaria o padrão anormal de "sempre 144p" detectável pelo YouTube.
-                    void 0;
-                }} catch (e) {{}}
-            }}
-            if (video.paused) {{
-                video.play().catch(() => {{}});
+            let pState = player && typeof player.getPlayerState === 'function' ? player.getPlayerState() : -1;
+            // Se o player estiver pausado (pState == 2), em buffer inicial (pState == -1) ou video.paused
+            if (video.paused || pState === 2 || pState === -1) {{
+                if (player && typeof player.playVideo === 'function') {{
+                    player.playVideo();
+                }} else {{
+                    video.play().catch(() => {{}});
+                }}
             }}
             return {{
                 found: true,
                 paused: video.paused,
+                playerState: pState,
                 currentTime: video.currentTime,
                 duration: video.duration
             }};
         }}""")
 
         if result.get("found"):
-            # Se ainda estava pausado, tenta clicar no player diretamente
-            if result.get("paused"):
-                play_button = page.locator(".ytp-play-button").first
-                if await play_button.is_visible(timeout=500):
-                    await play_button.click(timeout=500, force=True)
             return True
     except Exception as e:
         logger.debug(f"Aviso ao verificar status do player: {e}")
@@ -178,7 +172,7 @@ async def watch_video(
     last_active_time = start_time
     last_interaction_time = start_time
     accumulated_watch_time = 0.0
-    last_video_current_time = 0.0
+    last_video_current_time = -1.0
     stuck_buffer_count = 0
     sleep_duration = max(1.0, config.poll_interval)
 
@@ -230,6 +224,7 @@ async def watch_video(
         try:
             video_state = await page.evaluate("""() => {
                 const video = document.querySelector('video');
+                const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
                 if (!video) return { exists: false };
                 return {
                     exists: true,
@@ -237,7 +232,8 @@ async def watch_video(
                     ended: video.ended,
                     currentTime: video.currentTime,
                     duration: video.duration,
-                    readyState: video.readyState
+                    readyState: video.readyState,
+                    playerState: player && typeof player.getPlayerState === 'function' ? player.getPlayerState() : -1
                 };
             }""")
 
@@ -245,6 +241,7 @@ async def watch_video(
                 current_ct = video_state.get("currentTime", 0.0)
                 is_paused = video_state.get("paused", False)
                 is_ended = video_state.get("ended", False)
+                p_state = video_state.get("playerState", -1)
 
                 if is_ended:
                     stuck_buffer_count = 0
@@ -256,26 +253,45 @@ async def watch_video(
                     accumulated_watch_time += elapsed_loop
                     try:
                         await page.evaluate("""() => {
-                            const video = document.querySelector('video');
-                            if (video) {
-                                video.currentTime = 0;
-                                video.play().catch(() => {});
+                            const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+                            if (player && typeof player.playVideo === 'function') {
+                                player.seekTo(0, true);
+                                player.playVideo();
+                            } else {
+                                const video = document.querySelector('video');
+                                if (video) {
+                                    video.currentTime = 0;
+                                    video.play().catch(() => {});
+                                }
                             }
                         }""")
-                        replay_btn = page.locator("button.ytp-play-button[title*='Repetir'], button.ytp-play-button[title*='Replay'], .ytp-play-button").first
-                        if await replay_btn.is_visible(timeout=300):
-                            await replay_btn.click(timeout=300, force=True)
                         await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
                     except Exception as err:
                         logger.debug(f"[Worker {worker_id}] Erro ao reiniciar reprodução do vídeo: {err}")
 
-                elif is_paused:
+                elif last_video_current_time < 0:
+                    # Primeira iteração após carregamento
+                    last_video_current_time = current_ct
+                    stuck_buffer_count = 0
+                    accumulated_watch_time += elapsed_loop
+
+                elif is_paused or p_state == 2:
                     stuck_buffer_count += 1
-                    await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
+                    await page.evaluate("""() => {
+                        const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+                        if (player && typeof player.playVideo === 'function') {
+                            player.playVideo();
+                        }
+                        const v = document.querySelector('video');
+                        if (v && v.paused) { v.play().catch(() => {}); }
+                    }""")
 
                 elif abs(current_ct - last_video_current_time) < 0.2:
-                    # Player diz que não está pausado, mas currentTime está congelado (buffering / freeze)
-                    stuck_buffer_count += 1
+                    # Se o playerState for 1 (playing), o player está tocando normalmente
+                    if p_state == 1:
+                        accumulated_watch_time += elapsed_loop
+                    else:
+                        stuck_buffer_count += 1
                 else:
                     # Tocando normalmente e progredindo!
                     stuck_buffer_count = 0
@@ -298,30 +314,33 @@ async def watch_video(
 
                     if stuck_buffer_count == 2:
                         logger.warning(
-                            f"[Worker {worker_id}] ⚠️ Player estagnado (~10s). Acionando Play e atalho 'k'..."
+                            f"[Worker {worker_id}] ⚠️ Player estagnado (~10s). Acionando playVideo()..."
                         )
                         try:
-                            await page.keyboard.press("k")
                             await page.evaluate("""() => {
+                                const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+                                if (player && typeof player.playVideo === 'function') {
+                                    player.playVideo();
+                                }
                                 const v = document.querySelector('video');
-                                if (v) { v.play().catch(() => {}); }
+                                if (v && v.paused) { v.play().catch(() => {}); }
                             }""")
                         except Exception:
                             pass
 
                     elif stuck_buffer_count == 4:
                         logger.warning(
-                            f"[Worker {worker_id}] ⚠️ Buffering persistente (~20s). Forçando clique no player e avanço de frame..."
+                            f"[Worker {worker_id}] ⚠️ Buffering persistente (~20s). Forçando avanço sutil de frame e play..."
                         )
                         try:
-                            player_elem = page.locator("#movie_player, .html5-video-player").first
-                            if await player_elem.is_visible(timeout=500):
-                                await player_elem.click(timeout=500, force=True)
                             await page.evaluate("""() => {
                                 const v = document.querySelector('video');
                                 if (v) {
-                                    v.currentTime = Math.min(v.duration || 9999, v.currentTime + 1.0);
-                                    v.play().catch(() => {});
+                                    v.currentTime = Math.min(v.duration || 9999, v.currentTime + 0.5);
+                                }
+                                const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+                                if (player && typeof player.playVideo === 'function') {
+                                    player.playVideo();
                                 }
                             }""")
                         except Exception:

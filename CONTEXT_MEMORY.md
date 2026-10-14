@@ -1,7 +1,7 @@
 # Memória de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de Atualização:** Outubro de 2026  
-> **Versão do Projeto:** 2.7 Watch-Time Analytics & BotGuard Integrity Shield (Conformidade com Protótipos Nativos PluginArray + Interceptação Graciosa de Anúncios sem ERR_FAILED + Liberação de generate_204 + lact Contínuo < 15s + Áudio Positivo + Search & Play e Perfis Ativos por Padrão)  
+> **Versão do Projeto:** 2.7.1 Watch-Time Analytics & BotGuard Integrity Shield (Conformidade com Protótipos Nativos PluginArray + Interceptação Graciosa de Anúncios sem ERR_FAILED + Liberação de generate_204 + lact Contínuo < 15s + Áudio Positivo + Search & Play e Perfis Ativos por Padrão + Player API Nativa sem Toggles de Play/Pause)  
 > **Status dos Testes:** 76/76 testes passando (100% de sucesso)  
 > **Auditoria UI/UX:** Aprovado via Skill Impeccable (`impeccable detect` com 0 violações, conformidade WCAG AA)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
@@ -16,7 +16,7 @@ O **YouTube View & Watch-Time Bot** é um sistema avançado de automação assí
 - Simular navegação e comportamento de espectadores reais em vídeos individuais, playlists ou canais inteiros.
 - **Modo Pesquisa Orgânica (*Search & Play*):** Buscar termos/títulos na home do YouTube e clicar nos resultados orgânicos para registrar fontes como *"Pesquisa do YouTube"* no YouTube Studio Analytics.
 - Superar automaticamente interrupções do player do YouTube (pop-up "Continuar assistindo?", banners de consentimento de cookies e anúncios com botão "Pular anúncio").
-- **Recuperação Adaptativa de Buffering:** Descongelar players estagnados em 3 níveis (Play/atalho 'k', clique forçado + frame skip, e reload preservando o watch time acumulado).
+- **Recuperação Adaptativa de Buffering & Player API Nativa:** Descongelar players estagnados usando `movie_player.playVideo()` diretamente (sem atalhos cegos de alternância como 'k' ou cliques no botão de play que poderiam pausar o vídeo em reprodução).
 - **Alta Concorrência Escalável (1 a 50 Workers):** Operar com até 50 workers paralelos simultâneos no Painel Web e CLI, viabilizado pela redução drástica de consumo de memória RAM e CPU do modo ultra-leve.
 - **Temporizador de Rodada Estendido (Até 24h):** Configuração flexível de duração máxima de execução contínua de 0.1h até 24.0h via slider no painel web ou CLI.
 - **Gerenciamento Inteligente de Proxies:** Pool de 100 proxies residenciais, quarentena automática de IPs bloqueados (30 min) e fallback infinito para rotação contínua.
