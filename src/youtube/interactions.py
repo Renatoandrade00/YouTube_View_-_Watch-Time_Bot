@@ -21,14 +21,14 @@ async def simulate_human_micro_interactions(page: Page, worker_id: int) -> None:
       - scroll_comments  (10%): rola mais fundo para a seção de comentários e volta
     """
     try:
-        # Pesos calibrados para simular uma distribuição realista de atenção de usuário
+        # Pesos calibrados para manter lact saudável (<15s) e simular atenção humana realista
         actions = [
-            "idle", "idle", "idle", "idle", "idle",          # 25%
-            "mouse_move", "mouse_move", "mouse_move", "mouse_move",  # 20%
-            "hover_player", "hover_player", "hover_player", "hover_player",  # 20%
-            "scroll_sutil", "scroll_sutil", "scroll_sutil",  # 15%
-            "progress_bar_hover", "progress_bar_hover",      # 10%
-            "scroll_comments", "scroll_comments",            # 10%
+            "idle", "idle",                                           # 10%
+            "mouse_move", "mouse_move", "mouse_move", "mouse_move",   # 25%
+            "hover_player", "hover_player", "hover_player", "hover_player",  # 25%
+            "scroll_sutil", "scroll_sutil", "scroll_sutil",           # 15%
+            "progress_bar_hover", "progress_bar_hover",               # 10%
+            "scroll_comments", "scroll_comments", "scroll_comments",  # 15%
         ]
         action_type = random.choice(actions)
 

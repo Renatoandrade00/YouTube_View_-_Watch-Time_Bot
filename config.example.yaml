@@ -22,7 +22,7 @@ monitoring:
 stealth:
   enable_anti_fingerprint: true
   enable_micro_interactions: true
-  search_and_play: false
+  search_and_play: true
   min_delay_between_videos_seconds: 5.0
   max_delay_between_videos_seconds: 15.0
 
@@ -31,7 +31,7 @@ performance:
   auto_player_recovery: true
 
 profiles:
-  use_persistent_profiles: false
+  use_persistent_profiles: true
   profiles_dir: "profiles"
   cookies_file: null
 

@@ -178,39 +178,52 @@ class PlaywrightWorker:
                     }} catch(e) {{}}
                 }}""")
 
-                # BLOCKED_DOMAINS: apenas trackers e anúncios.
-                # IMPORTANTE: play.google.com/log e i.ytimg.com NÃO são bloqueados —
-                # play.google.com/log é o endpoint de heartbeat de reprodução pelo qual o
-                # YouTube registra o watch time; i.ytimg.com serve storyboard sprites usados
-                # para validação de progresso real. Bloqueá-los impede o registro no Analytics.
-                BLOCKED_DOMAINS = [
+                ESSENTIAL_PATTERNS = (
+                    "videoplayback",
+                    "generate_204",
+                    "api/stats",
+                    "youtubei/v1",
+                    "play.google.com",
+                    "i.ytimg.com",
+                    "fonts.gstatic.com",
+                )
+
+                AD_PATTERNS = (
                     "doubleclick.net",
                     "googleads",
                     "googleadservices.com",
                     "googlesyndication.com",
                     "adservice.google.com",
-                    "yt3.ggpht.com",
-                    # "i.ytimg.com",        # NÃO bloquear: storyboard validation
-                    # "play.google.com/log", # NÃO bloquear: heartbeat de watch time
-                ]
+                    "pagead",
+                )
 
                 async def _low_bandwidth_filter(route):
                     try:
                         req = route.request
                         url_lower = req.url.lower()
 
-                        # Bloqueia domínios de anúncios e telemetria de ads
-                        if any(domain in url_lower for domain in BLOCKED_DOMAINS) and "videoplayback" not in url_lower:
-                            await route.abort()
+                        # 1. Telemetria crítica do YouTube, storyboards, fontes e fluxos de vídeo: NUNCA abortar
+                        if any(p in url_lower for p in ESSENTIAL_PATTERNS):
+                            await route.continue_()
                             return
 
-                        # Bloqueia imagens e fontes estáticas secundárias
-                        # Exceção: i.ytimg.com pode servir storyboard (resource_type=image), então é permitido
-                        if req.resource_type in ["image", "font"] and "videoplayback" not in url_lower and "i.ytimg.com" not in url_lower:
-                            await route.abort()
+                        # 2. Anúncios e trackers: responder graciosamente com 200 OK vazio
+                        # Evita net::ERR_FAILED e gatilhos de ad-block / integridade no player do YouTube
+                        if any(p in url_lower for p in AD_PATTERNS):
+                            if req.resource_type in ["xhr", "fetch"]:
+                                await route.fulfill(status=200, content_type="application/json", body="{}")
+                            elif req.resource_type == "script":
+                                await route.fulfill(status=200, content_type="application/javascript", body="/* ok */")
+                            else:
+                                await route.fulfill(status=200, content_type="image/gif", body=b"")
                             return
 
-                        # Bloqueia media que não seja o stream de vídeo real
+                        # 3. Imagens pesadas secundárias (avatares, banners): 200 OK com 1x1 transparente
+                        if req.resource_type == "image":
+                            await route.fulfill(status=200, content_type="image/gif", body=b"")
+                            return
+
+                        # 4. Mídia de áudio secundária da interface (mantendo videoplayback)
                         if req.resource_type == "media" and "videoplayback" not in url_lower:
                             await route.abort()
                             return
@@ -223,21 +236,23 @@ class PlaywrightWorker:
 
                 await context.route("**/*", _low_bandwidth_filter)
 
-            # Silencia o vídeo via JS com MutationObserver — preserva o pipeline de áudio
-            # do sistema operacional (usado pelo YouTube para confirmar engajamento real),
-            # mas impede que o usuário ouça o som durante a automação.
-            if self.config.mute_audio:
+            # Gestão de áudio orgânica:
+            # Não força v.muted = true via MutationObserver (o que faria o beacon enviar muted=1 e volume=0).
+            # Em modo headless, o Chromium já não emite som físico ao sistema.
+            # Em modo não-headless, mantemos volume sutil (5-10%) para beacons válidos.
+            if self.config.mute_audio and not self.config.headless:
                 await context.add_init_script("""() => {
                     try {
-                        const muteAll = () => {
-                            document.querySelectorAll('video').forEach(v => { v.muted = true; });
+                        const setSubtleVolume = () => {
+                            document.querySelectorAll('video').forEach(v => {
+                                if (v.volume > 0.15) { v.volume = 0.05; }
+                            });
                         };
-                        muteAll();
-                        const observer = new MutationObserver(muteAll);
-                        observer.observe(document.documentElement, { childList: true, subtree: true });
+                        setSubtleVolume();
+                        setInterval(setSubtleVolume, 2500);
                     } catch(e) {}
                 }""")
-                logger.debug(f"[Worker {self.worker_id}] 🔇 Silenciamento via JS ativo (pipeline de áudio do OS preservado).")
+                logger.debug(f"[Worker {self.worker_id}] 🔉 Volume sutil ativo (beacons de áudio íntegros para o YouTube).")
 
             # Injeção de perfil anti-fingerprint (Canvas, WebGL, AudioContext, Hardware)
             gpu_desc = "Padrão do Sistema"

@@ -44,18 +44,17 @@ def test_build_stealth_injection_script():
     assert "navigator.webdriver" in script
     assert "UNMASKED_VENDOR_WEBGL" in script
     assert "UNMASKED_RENDERER_WEBGL" in script
-    assert "CanvasRenderingContext2D" in script
-    assert "AudioBuffer" in script
     assert str(profile.hardware_concurrency) in script
 
-    # Verificações do stealth expandido (Etapa 2)
-    assert "fakePlugins" in script
-    assert "navigator, 'plugins'" in script
+    # Verificações de conformidade com protótipos de navegadores reais (BotGuard-safe)
+    assert "PluginArray" in script
+    assert "plugins" in script
     assert "mimeTypes" in script
     assert "languages" in script
     assert "platform" in script
     assert "outerWidth" in script
     assert "outerHeight" in script
     assert "colorDepth" in script
+    assert "window.chrome" in script
     assert str(profile.outer_width) in script
     assert str(profile.outer_height) in script

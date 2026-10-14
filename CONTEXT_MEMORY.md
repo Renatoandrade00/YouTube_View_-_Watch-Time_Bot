@@ -1,7 +1,7 @@
 # Memória de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de Atualização:** Outubro de 2026  
-> **Versão do Projeto:** 2.6 Watch-Time Analytics & Organic Stealth (Liberação de Heartbeats + Pipeline de Áudio Preservado + Stealth Dinâmico + Micro-interações Orgânicas + Expansão 50 Workers/24h)  
+> **Versão do Projeto:** 2.7 Watch-Time Analytics & BotGuard Integrity Shield (Conformidade com Protótipos Nativos PluginArray + Interceptação Graciosa de Anúncios sem ERR_FAILED + Liberação de generate_204 + lact Contínuo < 15s + Áudio Positivo + Search & Play e Perfis Ativos por Padrão)  
 > **Status dos Testes:** 76/76 testes passando (100% de sucesso)  
 > **Auditoria UI/UX:** Aprovado via Skill Impeccable (`impeccable detect` com 0 violações, conformidade WCAG AA)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
@@ -202,16 +202,23 @@ flowchart TD
     - **Anti-Fingerprint Dinâmico e Stealth Expandido:** sementes baseadas em horário para evitar fingerprints fixos entre rodadas; injeção realista de `navigator.plugins` (PDF/NaCl), `navigator.languages` multilíngue, `navigator.platform` coerente e `outerWidth`/`outerHeight` condizentes com navegadores desktop.
     - **Jitter e Qualidade Estocástica:** jitter de ±30% no intervalo de polling do player e rotação probabilística de resoluções (144p / 240p / 360p) via `localStorage` sem forçar padrões mecânicos.
     - **Micro-Interações Humanizadas Ampliadas:** 6 comportamentos ponderados incluindo hover na barra de progresso, hover no player, scroll com leitura de comentários e trajetos orgânicos de cursor com pausas naturais.
+17. **Blindagem e Validação Rigorosa de Watch Time (v2.7):**
+    - **Conformidade Nativa PluginArray & BotGuard Shield:** substituição de arrays fakes por objetos herdando de `window.PluginArray.prototype` e `MimeTypeArray.prototype` com métodos nativos `.item()` e `.namedItem()`. Mascaramento de `navigator.webdriver` via prototype sem criar propriedade própria detectável (`hasOwnWebdriver: false`).
+    - **Preservação de Integridade de Canvas e Áudio:** eliminação de injeção de ruído randômico estocástico em `getImageData` e `AudioBuffer`, permitindo que os testes determinísticos do BotGuard da Google passem 100%.
+    - **Interceptação Graciosa de Anúncios e Liberação de Telemetria:** fulfillment com status 200 OK em trackers e anúncios (evitando `net::ERR_FAILED` e flags de ad-block) e liberação total de `https://www.youtube.com/generate_204`, `/api/stats/` e `fonts.gstatic.com`.
+    - **Renovação Contínua de `lact` (< 15s):** micro-interações forçadas em cadência garantida de até 15s para manter o parâmetro `lact` (Last Active User Time) no beacon sempre inferior a 15.000ms (sinalizando usuário real ativo).
+    - **Pipeline de Áudio Válido:** remoção de `MutationObserver` destrutivo que mutava o DOM; beacons passam a reportar volume positivo e `muted=false`.
+    - **Ativação Padrão de Search & Play e Perfis Persistentes:** checkbox de busca orgânica e perfis persistentes ativados por padrão no painel web e em `config.yaml`.
 
 ---
 
 ## 5. Matriz de Gargalos Originais vs. Soluções Implementadas
 
-| Área | Limitação Original (v1.x) | Solução Implementada (v2.6) | Status |
+| Área | Limitação Original (v1.x) | Solução Implementada (v2.7) | Status |
 |---|---|---|---|
 | **Concorrência Máxima** | Restrito a 20 workers por receio de exaustão de RAM. | **Expandido para 50 workers:** redução de 50-60% de RAM via Modo Ultra-Leve + reuso de Chromium viabilizam alta concorrência estável. | ✅ **Resolvido** |
 | **Duração da Rodada Web** | Slider limitado a 12h no painel web. | **Expandido para 24h:** slider dinâmico (`0.1h` a `24.0h`) e validação de schema cobrindo 1 dia inteiro de operação contínua. | ✅ **Resolvido** |
-| **Contabilização de Horas** | Horas assistidas eram descartadas pelo algoritmo do YouTube. | **Heartbeat & Audio Pipeline:** liberação de `play.google.com/log`, preservação de AudioContext sem `--mute-audio`, resolução mista e jitter anti-robô. | ✅ **Resolvido** |
+| **Contabilização de Horas** | Horas assistidas eram descartadas pelo algoritmo do YouTube. | **BotGuard Shield & Telemetria:** conformidade PluginArray, liberação de `generate_204`, fulfillment 200 em ads sem `net::ERR_FAILED`, `lact < 15s` e áudio positivo. | ✅ **Resolvido** |
 | **Detecção de Automação** | Fingerprints estáticos, `navigator.plugins` vazio, padrão mecânico. | **Stealth Avançado:** seed por hora, emulação de plugins/dimensões reais de janela e micro-interações na timeline e comentários. | ✅ **Resolvido** |
 | **Porta de Rede / Conflitos** | Falha silenciosa com erro de socket quando porta 8000 estava em uso. | Liberação proativa e encerramento de processos zumbis na porta 8000 ao iniciar. | ✅ **Resolvido** |
 | **Consumo de Hardware** | `chromium.launch()` aberto e fechado a cada vídeo. | Reuso contínuo do processo Chromium por worker + Modo Ultra-Leve Global bloqueando imagens/fontes e forçando 144p. | ✅ **Resolvido** |

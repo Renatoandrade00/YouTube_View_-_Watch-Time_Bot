@@ -50,7 +50,12 @@ async def ensure_video_playing(page: Page, mute_audio: bool = True, low_bandwidt
             const video = document.querySelector('video');
             if (!video) return {{ found: false }};
             if ({str(mute_audio).lower()}) {{
-                video.muted = true;
+                // Preserva muted=false com volume sutil para que o beacon /api/stats/watchtime
+                // registre volume positivo e estado sonoro válido no algoritmo do YouTube.
+                try {{
+                    if (video.muted) {{ video.muted = false; }}
+                    if (video.volume > 0.15) {{ video.volume = 0.05; }}
+                }} catch(e) {{}}
             }}
             if ({str(low_bandwidth).lower()}) {{
                 try {{
@@ -171,6 +176,7 @@ async def watch_video(
 
     start_time = time.time()
     last_active_time = start_time
+    last_interaction_time = start_time
     accumulated_watch_time = 0.0
     last_video_current_time = 0.0
     stuck_buffer_count = 0
@@ -360,9 +366,14 @@ async def watch_video(
         except Exception as e:
             logger.debug(f"[Worker {worker_id}] Exceção na verificação periódica: {e}")
 
-        # 4. Micro-interações humanas ocasionais (movimento de mouse, hover no player, scroll sutil)
-        if config.enable_micro_interactions and random.random() < 0.35:
+        # 4. Micro-interações humanas e renovação periódica de lact (Last Active User Time < 15s)
+        now_ts = time.time()
+        should_interact = config.enable_micro_interactions and (
+            (now_ts - last_interaction_time) >= 12.0 or random.random() < 0.60
+        )
+        if should_interact:
             await simulate_human_micro_interactions(page, worker_id)
+            last_interaction_time = now_ts
 
         stats["actual_watch_time"] = round(accumulated_watch_time, 1)
 
