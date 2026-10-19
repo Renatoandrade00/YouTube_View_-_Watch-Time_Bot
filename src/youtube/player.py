@@ -175,10 +175,16 @@ async def watch_video(
 
     start_time = time.time()
     last_active_time = start_time
+    last_progress_time = start_time
+    last_recovery_time = 0.0
     accumulated_watch_time = 0.0
-    last_video_current_time = 0.0
+    last_video_current_time: float | None = None
     stuck_buffer_count = 0
     sleep_duration = max(1.0, config.poll_interval)
+    stuck_level1_seconds = 10.0
+    stuck_level2_seconds = 20.0
+    stuck_level3_seconds = 30.0
+    recovery_min_interval_seconds = 5.0
 
     while accumulated_watch_time < target_watch_seconds:
         # Verifica se o bot foi parado ou se a Duração Total da Rodada encerrou
@@ -240,18 +246,28 @@ async def watch_video(
             }""")
 
             if video_state.get("exists"):
-                current_ct = video_state.get("currentTime", 0.0)
+                current_ct = float(video_state.get("currentTime") or 0.0)
+                duration = float(video_state.get("duration") or 0.0)
                 is_paused = video_state.get("paused", False)
                 is_ended = video_state.get("ended", False)
 
-                if is_ended:
+                if last_video_current_time is None:
+                    # Primeira leitura do player: estabelece referência sem contar tempo
+                    last_video_current_time = current_ct
+                    last_progress_time = current_now
                     stuck_buffer_count = 0
-                    # O vídeo terminou antes da meta: reinicia o vídeo do início para completar o watch time
+
+                elif is_ended:
+                    # Conta o segmento restante até o fim antes de reiniciar o vídeo
+                    segment = max(0.0, duration - last_video_current_time)
+                    accumulated_watch_time += segment
+                    last_progress_time = current_now
+                    last_video_current_time = 0.0
+                    stuck_buffer_count = 0
                     logger.info(
                         f"[Worker {worker_id}] 🔄 Vídeo finalizou aos {accumulated_watch_time:.0f}s. "
                         f"Reiniciando do início para continuar assistindo até a meta ({target_watch_seconds}s)..."
                     )
-                    accumulated_watch_time += elapsed_loop
                     try:
                         await page.evaluate("""() => {
                             const video = document.querySelector('video');
@@ -271,19 +287,24 @@ async def watch_video(
                     stuck_buffer_count += 1
                     await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
 
-                elif abs(current_ct - last_video_current_time) < 0.2:
-                    # Player diz que não está pausado, mas currentTime está congelado (buffering / freeze)
-                    stuck_buffer_count += 1
                 else:
-                    # Tocando normalmente e progredindo!
-                    stuck_buffer_count = 0
-                    accumulated_watch_time += elapsed_loop
-                    last_video_current_time = current_ct
+                    # Conta o avanço real do currentTime do player (watch time efetivo),
+                    # não apenas o tempo de parede, para não superestimar horas.
+                    delta = max(0.0, current_ct - last_video_current_time)
+                    if delta > 0.05:
+                        accumulated_watch_time += delta
+                        last_video_current_time = current_ct
+                        last_progress_time = current_now
+                        stuck_buffer_count = 0
+                    else:
+                        # Sem avanço de currentTime: possível buffering/travamento
+                        stuck_buffer_count += 1
 
                 # Mecanismo de Recuperação Adaptativa de Buffering / Travamento (Auto-Recovery)
+                no_progress_for = current_now - last_progress_time
                 if stuck_buffer_count >= 2 and getattr(config, "auto_player_recovery", True):
                     if getattr(config, "telemetry_enabled", True):
-                        get_collector().record(worker_id, session_id, "buffering", f"stuck_{stuck_buffer_count}")
+                        get_collector().record(worker_id, session_id, "buffering", f"stuck_{stuck_buffer_count}_no_progress_{no_progress_for:.1f}s")
                     try:
                         from src.web.state import StateManager
                         sm = StateManager.get_instance()
@@ -296,23 +317,31 @@ async def watch_video(
                     except Exception:
                         pass
 
-                    if stuck_buffer_count == 2:
+                    if current_now - last_recovery_time < recovery_min_interval_seconds:
+                        # Evita disparos repetitivos de recuperação em curto intervalo
+                        pass
+                    elif no_progress_for >= stuck_level3_seconds:
                         logger.warning(
-                            f"[Worker {worker_id}] ⚠️ Player estagnado (~10s). Acionando Play e atalho 'k'..."
+                            f"[Worker {worker_id}] 🔄 Buffering infinito detectado (~{stuck_level3_seconds:.0f}s). "
+                            f"Recarregando página preservando tempo acumulado ({accumulated_watch_time:.0f}s)..."
                         )
+                        last_recovery_time = current_now
+                        stuck_buffer_count = 0
+                        last_progress_time = current_now
                         try:
-                            await page.keyboard.press("k")
-                            await page.evaluate("""() => {
-                                const v = document.querySelector('video');
-                                if (v) { v.play().catch(() => {}); }
-                            }""")
-                        except Exception:
-                            pass
+                            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                            await asyncio.sleep(2.0)
+                            await handle_consent_popups(page)
+                            await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
+                        except Exception as e:
+                            logger.debug(f"[Worker {worker_id}] Falha ao recarregar página para auto-recovery: {e}")
 
-                    elif stuck_buffer_count == 4:
+                    elif no_progress_for >= stuck_level2_seconds:
                         logger.warning(
-                            f"[Worker {worker_id}] ⚠️ Buffering persistente (~20s). Forçando clique no player e avanço de frame..."
+                            f"[Worker {worker_id}] ⚠️ Buffering persistente (~{stuck_level2_seconds:.0f}s). "
+                            "Forçando clique no player e avanço de frame..."
                         )
+                        last_recovery_time = current_now
                         try:
                             player_elem = page.locator("#movie_player, .html5-video-player").first
                             if await player_elem.is_visible(timeout=500):
@@ -327,18 +356,19 @@ async def watch_video(
                         except Exception:
                             pass
 
-                    elif stuck_buffer_count >= 6:
+                    elif no_progress_for >= stuck_level1_seconds:
                         logger.warning(
-                            f"[Worker {worker_id}] 🔄 Buffering infinito detectado (~30s). Recarregando página preservando tempo acumulado ({accumulated_watch_time:.0f}s)..."
+                            f"[Worker {worker_id}] ⚠️ Player estagnado (~{stuck_level1_seconds:.0f}s). Acionando Play e atalho 'k'..."
                         )
-                        stuck_buffer_count = 0
+                        last_recovery_time = current_now
                         try:
-                            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                            await asyncio.sleep(2.0)
-                            await handle_consent_popups(page)
-                            await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
-                        except Exception as e:
-                            logger.debug(f"[Worker {worker_id}] Falha ao recarregar página para auto-recovery: {e}")
+                            await page.keyboard.press("k")
+                            await page.evaluate("""() => {
+                                const v = document.querySelector('video');
+                                if (v) { v.play().catch(() => {}); }
+                            }""")
+                        except Exception:
+                            pass
             else:
                 # Se não encontrou o elemento de vídeo após 15s de navegação, verifica se caiu em bloqueio textual
                 if (time.time() - start_time) > 15.0 and accumulated_watch_time == 0:

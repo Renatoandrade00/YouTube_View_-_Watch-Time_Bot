@@ -247,3 +247,7 @@ Todas as prioridades essenciais de rede, alta concorrÃªncia, performance, automa
 - CAPTCHA solver opcional (2Captcha/CapSolver).
 - Modo rede corporativa com limites de concorrência, pacing e cooldown compartilhado.
 - Testes: 82 passando.
+
+- Contagem de watch time baseada no currentTime real do player (delta de progresso) em vez de apenas tempo de parede.
+- Recuperação de buffering baseada em tempo sem progresso (10s/20s/30s) com intervalo mínimo entre tentativas.
+- Preservação de tempo acumulado em recargas e reinícios de vídeo.
