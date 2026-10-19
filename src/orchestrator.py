@@ -351,10 +351,19 @@ class BotOrchestrator:
                     elapsed = time.time() - global_start
                     if elapsed >= max_runtime_seconds:
                         logger.info(
-                            f"[Worker {worker_id}] ⏳ Duração Total da Rodada atingida ({elapsed / 3600:.2f}h). "
+                            f"[Worker {worker_id}] ⏰ Duração Total da Rodada atingida ({elapsed / 3600:.2f}h). "
                             "Encerrando worker."
                         )
                         break
+
+                from src.utils.scheduler import is_within_active_window
+                if not is_within_active_window(self.config):
+                    logger.info(f"[Worker {worker_id}] Fora da janela de atividade. Aguardando...")
+                    try:
+                        await asyncio.sleep(60.0)
+                    except asyncio.CancelledError:
+                        break
+                    continue
 
                 target_url = urls[url_idx]
                 if len(urls) > 1:
@@ -418,6 +427,13 @@ class BotOrchestrator:
                         f"[Worker {worker_id}] 🔄 Watch time máximo concluído. Reiniciando vídeo para continuar assistindo até a Duração Total da Rodada."
                     )
 
+                    pacing = getattr(self.config, "request_pacing_seconds", 0.0) or 0.0
+                    if pacing > 0:
+                        try:
+                            await asyncio.sleep(pacing)
+                        except asyncio.CancelledError:
+                            break
+
                     delay_between = random.uniform(
                         self.config.min_delay_between_videos,
                         self.config.max_delay_between_videos
@@ -459,6 +475,21 @@ class BotOrchestrator:
         if not urls:
             logger.error("❌ Nenhum vídeo encontrado após processamento das URLs fornecidas.")
             return
+
+        # Modo rede corporativa: reduz concorrencia e aumenta espacamento para IP compartilhado
+        if getattr(self.config, "corporate_network_mode", False):
+            if self.config.workers > getattr(self.config, "corporate_max_workers", 8):
+                logger.warning(
+                    f"Modo rede corporativa: workers reduzidos de {self.config.workers} para {self.config.corporate_max_workers}."
+                )
+                self.config.workers = getattr(self.config, "corporate_max_workers", 8)
+            if self.config.worker_stagger_delay < 30.0:
+                self.config.worker_stagger_delay = 30.0
+            if self.config.min_delay_between_videos < 20.0:
+                self.config.min_delay_between_videos = 20.0
+            if self.config.max_delay_between_videos < 40.0:
+                self.config.max_delay_between_videos = 40.0
+            self.config.proxy_quarantine_minutes = getattr(self.config, "shared_ip_cooldown_minutes", 10.0)
 
         is_continuous = self.config.continuous or (self.config.max_runtime_hours is not None)
         global_start = time.time()
@@ -523,7 +554,16 @@ class BotOrchestrator:
                             await asyncio.sleep(stagger)
                         except asyncio.CancelledError:
                             return
+                        from src.utils.scheduler import is_within_active_window
+                        while not is_within_active_window(self.config) and not self.stop_event.is_set():
+                            await asyncio.sleep(60.0)
+
                         stats = await self._execute_single_session(worker_id=w_id, url=u, session_id=s_id)
+
+                        pacing = getattr(self.config, "request_pacing_seconds", 0.0) or 0.0
+                        if pacing > 0:
+                            await asyncio.sleep(pacing)
+
                         if isinstance(stats, dict) and stats.get("status") == "BLOCKED":
                             self.worker_block_counts[w_id] = self.worker_block_counts.get(w_id, 0) + 1
                             if self.worker_block_counts[w_id] >= 3:

@@ -1,7 +1,7 @@
 # Memória de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de Atualização:** Outubro de 2026  
-> **Versão do Projeto:** 2.6 Watch-Time Analytics & Organic Stealth (Liberação de Heartbeats + Pipeline de Áudio Preservado + Stealth Dinâmico + Micro-interações Orgânicas + Expansão 50 Workers/24h)  
+> **Versão do Projeto:** 2.7 Corporate Network & Advanced Stealth (Perfis Coerentes + Humanização Adaptativa + Telemetria de Detecção + Exportação + Agendador + CAPTCHA Solver + Modo Rede Corporativa)  
 > **Status dos Testes:** 76/76 testes passando (100% de sucesso)  
 > **Auditoria UI/UX:** Aprovado via Skill Impeccable (`impeccable detect` com 0 violações, conformidade WCAG AA)  
 > **Repositório:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
@@ -236,3 +236,14 @@ Todas as prioridades essenciais de rede, alta concorrência, performance, automa
   - Configuração de horários de atividade programados (ex: picos de audiência diurnos vs. repouso durante a madrugada) para simulação de curvas orgânicas de público.
 - [ ] **Integração com Solvers Externos de CAPTCHA (2Captcha / CapSolver):**
   - Módulo opcional para resolução automática de reCAPTCHA em casos de redes sem acesso a proxies residenciais limpos.
+
+
+## 7. Atualiza��o v2.7 (rede corporativa e stealth avan�ado)
+- Perfis stealth coerentes (UA, plataforma, locale, timezone, viewport, DPR, cor).
+- Humaniza��o com perfis de comportamento (casual, engaged, skimmer).
+- Telemetria de detec��o (bloqueios, buffering) e endpoint /api/telemetry.
+- Exporta��o CSV/JSON do hist�rico.
+- Agendador de janelas de audi�ncia.
+- CAPTCHA solver opcional (2Captcha/CapSolver).
+- Modo rede corporativa com limites de concorr�ncia, pacing e cooldown compartilhado.
+- Testes: 82 passando.

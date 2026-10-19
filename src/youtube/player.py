@@ -12,6 +12,7 @@ from src.youtube.ads import try_skip_ad
 from src.youtube.continue_watching import handle_continue_watching_dialog
 from src.youtube.interactions import simulate_human_micro_interactions
 from src.utils.helpers import random_async_sleep
+from src.utils.telemetry import get_collector
 
 logger = logging.getLogger("bot")
 
@@ -94,6 +95,7 @@ async def watch_video(
     worker_id: int,
     stop_event: asyncio.Event | None = None,
     max_end_time: float | None = None,
+    session_id: int = 0,
 ) -> Dict[str, Any]:
     """
     Navega até a URL do YouTube e monitora a reprodução até o tempo limite desejado.
@@ -133,6 +135,8 @@ async def watch_video(
     page_url_str = raw_url if isinstance(raw_url, str) else str(raw_url)
     current_url_lower = page_url_str.lower()
     if "sorry/index" in current_url_lower or "google.com/sorry" in current_url_lower:
+        if getattr(config, "telemetry_enabled", True):
+            get_collector().record(worker_id, session_id, "blocked", "google_sorry_redirect")
         stats["status"] = "BLOCKED"
         stats["error_message"] = "Bloqueio temporário do Google (CAPTCHA / Tráfego Incomum detectado)"
         logger.error(
@@ -278,6 +282,8 @@ async def watch_video(
 
                 # Mecanismo de Recuperação Adaptativa de Buffering / Travamento (Auto-Recovery)
                 if stuck_buffer_count >= 2 and getattr(config, "auto_player_recovery", True):
+                    if getattr(config, "telemetry_enabled", True):
+                        get_collector().record(worker_id, session_id, "buffering", f"stuck_{stuck_buffer_count}")
                     try:
                         from src.web.state import StateManager
                         sm = StateManager.get_instance()
@@ -362,7 +368,9 @@ async def watch_video(
 
         # 4. Micro-interações humanas ocasionais (movimento de mouse, hover no player, scroll sutil)
         if config.enable_micro_interactions and random.random() < 0.35:
-            await simulate_human_micro_interactions(page, worker_id)
+            await simulate_human_micro_interactions(
+                page, worker_id, getattr(config, "human_behavior_profile", "mixed")
+            )
 
         stats["actual_watch_time"] = round(accumulated_watch_time, 1)
 
