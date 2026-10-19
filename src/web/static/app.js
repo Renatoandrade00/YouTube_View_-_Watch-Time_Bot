@@ -30,6 +30,17 @@ document.addEventListener("DOMContentLoaded", () => {
     const toggleAutoRecovery = document.getElementById("toggle-auto-recovery");
     const toggleSearchPlay = document.getElementById("toggle-search-play");
 
+    const toggleCorporateNetwork = document.getElementById("toggle-corporate-network");
+    const requestPacingInput = document.getElementById("request-pacing-input");
+    const humanProfileSelect = document.getElementById("human-profile-select");
+    const activeHoursStart = document.getElementById("active-hours-start");
+    const activeHoursEnd = document.getElementById("active-hours-end");
+    const captchaProviderSelect = document.getElementById("captcha-provider-select");
+    const captchaApiKeyInput = document.getElementById("captcha-api-key-input");
+    const toggleTelemetry = document.getElementById("toggle-telemetry");
+    const btnExportCsv = document.getElementById("btn-export-csv");
+    const btnExportJson = document.getElementById("btn-export-json");
+
     // Proxy DOM Elements
     const toggleEnableProxy = document.getElementById("toggle-enable-proxy");
     const proxyDetailsContainer = document.getElementById("proxy-details-container");
@@ -498,6 +509,15 @@ document.addEventListener("DOMContentLoaded", () => {
             block_heavy_media: toggleBlockMedia ? toggleBlockMedia.checked : true,
             auto_player_recovery: toggleAutoRecovery ? toggleAutoRecovery.checked : true,
             search_and_play: toggleSearchPlay ? toggleSearchPlay.checked : false,
+            corporate_network_mode: toggleCorporateNetwork ? toggleCorporateNetwork.checked : false,
+            request_pacing_seconds: requestPacingInput ? (parseFloat(requestPacingInput.value) || 0) : 0,
+            human_behavior_profile: humanProfileSelect ? humanProfileSelect.value : "mixed",
+            active_hours_start: activeHoursStart && activeHoursStart.value ? parseInt(activeHoursStart.value, 10) : null,
+            active_hours_end: activeHoursEnd && activeHoursEnd.value ? parseInt(activeHoursEnd.value, 10) : null,
+            active_days: [],
+            captcha_solver_provider: captchaProviderSelect && captchaProviderSelect.value ? captchaProviderSelect.value : null,
+            captcha_solver_api_key: captchaApiKeyInput && captchaApiKeyInput.value.trim() ? captchaApiKeyInput.value.trim() : null,
+            telemetry_enabled: toggleTelemetry ? toggleTelemetry.checked : true,
         };
 
 
@@ -691,6 +711,18 @@ document.addEventListener("DOMContentLoaded", () => {
         btnRefreshHistory.addEventListener("click", () => {
             loadHistory();
             showToast("Histórico atualizado.", "info");
+        });
+    }
+
+    if (btnExportCsv) {
+        btnExportCsv.addEventListener("click", () => {
+            window.open("/api/export/runs.csv", "_blank");
+        });
+    }
+
+    if (btnExportJson) {
+        btnExportJson.addEventListener("click", () => {
+            window.open("/api/export/runs.json", "_blank");
         });
     }
 
