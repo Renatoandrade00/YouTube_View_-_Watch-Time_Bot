@@ -1,13 +1,17 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube Bot — Painel de Controle</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css?v=4.0">
 </head>
+
 <body>
     <div class="app-container">
         <!-- Top Navigation Bar -->
@@ -16,7 +20,7 @@
                 <div class="brand-icon">▶</div>
                 <div class="brand-text">
                     <h1>YouTube Watch-Time Bot</h1>
-                    <span class="badge-version">v2.4 Telemetry Studio</span>
+                    <span class="badge-version">v2.7 Telemetry Studio</span>
                 </div>
             </div>
             <div class="nav-tabs">
@@ -43,313 +47,342 @@
         <!-- Live Dashboard Panel -->
         <div id="view-live" class="view-panel active">
             <main class="dashboard-grid">
-            <!-- Left Column: Controls & Configuration -->
-            <section class="config-panel">
-                <div class="panel-header">
-                    <h2>⚙️ Configuração da Sessão</h2>
-                    <p class="subtitle">Personalize os vídeos, concorrência e estratégias de navegação</p>
-                </div>
-
-                <!-- URLs Input Card -->
-                <div class="card glass-card">
-                    <div class="card-title-row">
-                        <h3>🎬 Vídeos Alvo (YouTube)</h3>
-                        <div class="urls-actions">
-                            <span class="counter-badge" id="urls-count-badge">0 vídeos</span>
-                            <button type="button" class="btn-sm btn-subtle" id="btn-load-defaults" title="Recarregar URLs padrão do urls.txt">Carregar urls.txt</button>
-                            <button type="button" class="btn-sm btn-subtle" id="btn-extract-playlist" title="Extrair vídeos de playlists ou canais">✨ Extrair Playlist/Canal</button>
-                        </div>
-                    </div>
-                    <textarea id="urls-input" rows="5" placeholder="Insira uma URL por linha:&#10;https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/playlist?list=...&#10;https://www.youtube.com/@Canal/videos"></textarea>
-                    <small class="hint">Cole links de vídeos individuais, playlists ou canais (@canal/videos).</small>
-                </div>
-
-                <!-- Parameters Card -->
-                <div class="card glass-card">
-                    <h3>⚡ Concorrência & Duração</h3>
-                    <div class="form-group">
-                        <div class="label-row">
-                            <label for="workers-slider">Workers Simultâneos:</label>
-                            <span class="val-display" id="workers-val">5</span>
-                        </div>
-                        <input type="range" id="workers-slider" min="1" max="50" value="5" step="1">
-                        <small class="hint">Instâncias isoladas de Chromium rodando em paralelo.</small>
+                <!-- Left Column: Controls & Configuration -->
+                <section class="config-panel">
+                    <div class="panel-header">
+                        <h2>⚙️ Configuração da Sessão</h2>
+                        <p class="subtitle">Personalize os vídeos, concorrência e estratégias de navegação</p>
                     </div>
 
-                    <div class="form-group">
-                        <div class="label-row">
-                            <label for="duration-slider">Duração Total da Rodada (Horas):</label>
-                            <span class="val-display" id="duration-val">1.0h</span>
-                        </div>
-                        <input type="range" id="duration-slider" min="0.1" max="24" value="1.0" step="0.1">
-                        <small class="hint">Tempo máximo contínuo antes de concluir automaticamente.</small>
-                    </div>
-
-                    <div class="grid-2col">
-                        <div class="form-group">
-                            <label for="min-watch-input">Watch Time Mín (em MINUTOS):</label>
-                            <input type="number" id="min-watch-input" value="2.0" min="0.1" step="0.5" placeholder="Ex: 40 para 40 min">
-                        </div>
-                        <div class="form-group">
-                            <label for="max-watch-input">Watch Time Máx (em MINUTOS):</label>
-                            <input type="number" id="max-watch-input" value="5.0" min="0.1" step="0.5" placeholder="Ex: 75 para 75 min">
-                        </div>
-                    </div>
-
-                    <div class="grid-2col">
-                        <div class="form-group">
-                            <label for="min-delay-input">Pausa Mín (s):</label>
-                            <input type="number" id="min-delay-input" value="5" min="1" step="1">
-                        </div>
-                        <div class="form-group">
-                            <label for="max-delay-input">Pausa Máx (s):</label>
-                            <input type="number" id="max-delay-input" value="15" min="1" step="1">
-                        </div>
-                    </div>
-
-                    <div class="form-group" style="margin-top: 10px;">
-                        <label for="stagger-delay-input" title="Intervalo de segurança entre o início de cada worker para não disparar requisições em massa simultâneas">⏳ Intervalo de Inicialização entre Workers (s):</label>
-                        <input type="number" id="stagger-delay-input" value="15" min="0" max="120" step="1" title="Segundos de espera antes de iniciar o próximo worker">
-                        <small style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 4px;">Escalonamento gradual (ramp-up) para evitar bloqueio de IP/CAPTCHA pelo Google</small>
-                    </div>
-                </div>
-
-                <!-- Proxy Configuration Card -->
-                <div class="card glass-card">
-                    <div class="card-title-row">
-                        <h3>🌐 Rede & Proxies</h3>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-enable-proxy">
-                            <span class="slider"></span>
-                            <span class="toggle-label" style="font-weight: 600;">Ativar</span>
-                        </label>
-                    </div>
-                    <div id="proxy-details-container" style="display: none; margin-top: 10px;">
-                        <div class="card-title-row" style="margin-bottom: 6px;">
-                            <span class="hint">1 proxy por linha (http://user:pass@host:port ou host:port):</span>
+                    <!-- URLs Input Card -->
+                    <div class="card glass-card">
+                        <div class="card-title-row">
+                            <h3>🎬 Vídeos Alvo (YouTube)</h3>
                             <div class="urls-actions">
-                                <span class="counter-badge" id="proxies-count-badge">0 proxies</span>
-                                <button type="button" class="btn-sm btn-subtle" id="btn-load-proxies" title="Carregar proxies do proxies.txt">Carregar proxies.txt</button>
+                                <span class="counter-badge" id="urls-count-badge">0 vídeos</span>
+                                <button type="button" class="btn-sm btn-subtle" id="btn-load-defaults"
+                                    title="Recarregar URLs padrão do urls.txt">Carregar urls.txt</button>
+                                <button type="button" class="btn-sm btn-subtle" id="btn-extract-playlist"
+                                    title="Extrair vídeos de playlists ou canais">✨ Extrair Playlist/Canal</button>
                             </div>
                         </div>
-                        <textarea id="proxies-input" rows="3" placeholder="http://usuario:senha@proxy1.com:8000&#10;http://usuario:senha@proxy2.com:8000"></textarea>
-                        
-                        <div class="form-group" style="margin-top: 8px;">
-                            <label for="proxy-template-input" style="font-size: 0.8rem;">Gateway Rotativo Único (Opcional):</label>
-                            <input type="text" id="proxy-template-input" placeholder="Ex: http://user-session-{worker_id}:pass@gateway.com:7000" style="font-size: 0.8rem; padding: 6px 10px;">
-                            <small class="hint">{worker_id} será substituído pelo ID de cada instância.</small>
+                        <textarea id="urls-input" rows="5"
+                            placeholder="Insira uma URL por linha:&#10;https://www.youtube.com/watch?v=...&#10;https://www.youtube.com/playlist?list=...&#10;https://www.youtube.com/@Canal/videos"></textarea>
+                        <small class="hint">Cole links de vídeos individuais, playlists ou canais
+                            (@canal/videos).</small>
+                    </div>
+
+                    <!-- Parameters Card -->
+                    <div class="card glass-card">
+                        <h3>⚡ Concorrência & Duração</h3>
+                        <div class="form-group">
+                            <div class="label-row">
+                                <label for="workers-slider">Workers Simultâneos:</label>
+                                <span class="val-display" id="workers-val">5</span>
+                            </div>
+                            <input type="range" id="workers-slider" min="1" max="50" value="5" step="1">
+                            <small class="hint">Instâncias isoladas de Chromium rodando em paralelo.</small>
                         </div>
 
-                        <div style="margin-top: 10px;">
+                        <div class="form-group">
+                            <div class="label-row">
+                                <label for="duration-slider">Duração Total da Rodada (Horas):</label>
+                                <span class="val-display" id="duration-val">1.0h</span>
+                            </div>
+                            <input type="range" id="duration-slider" min="0.1" max="24" value="1.0" step="0.1">
+                            <small class="hint">Tempo máximo contínuo antes de concluir automaticamente.</small>
+                        </div>
+
+                        <div class="grid-2col">
+                            <div class="form-group">
+                                <label for="min-watch-input">Watch Time Mín (em MINUTOS):</label>
+                                <input type="number" id="min-watch-input" value="2.0" min="0.1" step="0.5"
+                                    placeholder="Ex: 40 para 40 min">
+                            </div>
+                            <div class="form-group">
+                                <label for="max-watch-input">Watch Time Máx (em MINUTOS):</label>
+                                <input type="number" id="max-watch-input" value="5.0" min="0.1" step="0.5"
+                                    placeholder="Ex: 75 para 75 min">
+                            </div>
+                        </div>
+
+                        <div class="grid-2col">
+                            <div class="form-group">
+                                <label for="min-delay-input">Pausa Mín (s):</label>
+                                <input type="number" id="min-delay-input" value="5" min="1" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="max-delay-input">Pausa Máx (s):</label>
+                                <input type="number" id="max-delay-input" value="15" min="1" step="1">
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 10px;">
+                            <label for="stagger-delay-input"
+                                title="Intervalo de segurança entre o início de cada worker para não disparar requisições em massa simultâneas">⏳
+                                Intervalo de Inicialização entre Workers (s):</label>
+                            <input type="number" id="stagger-delay-input" value="15" min="0" max="120" step="1"
+                                title="Segundos de espera antes de iniciar o próximo worker">
+                            <small
+                                style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 4px;">Escalonamento
+                                gradual (ramp-up) para evitar bloqueio de IP/CAPTCHA pelo Google</small>
+                        </div>
+                    </div>
+
+                    <!-- Proxy Configuration Card -->
+                    <div class="card glass-card">
+                        <div class="card-title-row">
+                            <h3>🌐 Rede & Proxies</h3>
                             <label class="toggle-switch">
-                                <input type="checkbox" id="toggle-proxy-low-bw" checked>
+                                <input type="checkbox" id="toggle-enable-proxy">
                                 <span class="slider"></span>
-                                <span class="toggle-label" style="font-size: 0.85rem;">Economia Máxima de Banda (144p + Bloqueio de Imagens)</span>
+                                <span class="toggle-label" style="font-weight: 600;">Ativar</span>
                             </label>
-                            <small class="hint" style="display: block; margin-top: 2px;">Reduz em até 90% o consumo de Gigabytes em proxies pagos.</small>
+                        </div>
+                        <div id="proxy-details-container" style="display: none; margin-top: 10px;">
+                            <div class="card-title-row" style="margin-bottom: 6px;">
+                                <span class="hint">1 proxy por linha (http://user:pass@host:port ou host:port):</span>
+                                <div class="urls-actions">
+                                    <span class="counter-badge" id="proxies-count-badge">0 proxies</span>
+                                    <button type="button" class="btn-sm btn-subtle" id="btn-load-proxies"
+                                        title="Carregar proxies do proxies.txt">Carregar proxies.txt</button>
+                                </div>
+                            </div>
+                            <textarea id="proxies-input" rows="3"
+                                placeholder="http://usuario:senha@proxy1.com:8000&#10;http://usuario:senha@proxy2.com:8000"></textarea>
+
+                            <div class="form-group" style="margin-top: 8px;">
+                                <label for="proxy-template-input" style="font-size: 0.8rem;">Gateway Rotativo Único
+                                    (Opcional):</label>
+                                <input type="text" id="proxy-template-input"
+                                    placeholder="Ex: http://user-session-{worker_id}:pass@gateway.com:7000"
+                                    style="font-size: 0.8rem; padding: 6px 10px;">
+                                <small class="hint">{worker_id} será substituído pelo ID de cada instância.</small>
+                            </div>
+
+                            <div style="margin-top: 10px;">
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="toggle-proxy-low-bw" checked>
+                                    <span class="slider"></span>
+                                    <span class="toggle-label" style="font-size: 0.85rem;">Economia Máxima de Banda
+                                        (144p + Bloqueio de Imagens)</span>
+                                </label>
+                                <small class="hint" style="display: block; margin-top: 2px;">Reduz em até 90% o consumo
+                                    de Gigabytes em proxies pagos.</small>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Stealth & Automation Toggles -->
-                <div class="card glass-card">
-                    <h3>🛡️ Proteção Anti-Detecção & Automação</h3>
-                    <div class="toggles-list">
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-anti-fingerprint" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">Anti-Fingerprint (Canvas/WebGL/Audio)</span>
-                        </label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-micro-interactions" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">Micro-Interações Humanas (Mouse/Scroll)</span>
-                        </label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-skip-ads" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">Pular Anúncios Automaticamente</span>
-                        </label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-auto-continue" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">Superar 'Continuar Assistindo'</span>
-                        </label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-persistent-profiles" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">Perfis Persistentes (Salvar Sessão/Login)</span>
-                        </label>
-                        <div id="cookies-details-wrap" style="padding-left: 28px; margin-top: -4px; margin-bottom: 6px;">
-                            <input type="text" id="cookies-file-input" placeholder="Arquivo de Cookies (ex: cookies.json)" style="font-size: 0.8rem; padding: 6px 10px; width: 100%; border-radius: 6px; background: rgba(10,14,23,0.7); border: 1px solid var(--border-color); color: var(--text-primary);">
-                            <small class="hint" style="display: block; margin-top: 2px;">Opcional: Injeta cookies exportados (JSON ou Netscape) na inicialização.</small>
+                    <!-- Stealth & Automation Toggles -->
+                    <div class="card glass-card">
+                        <h3>🛡️ Proteção Anti-Detecção & Automação</h3>
+                        <div class="toggles-list">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-anti-fingerprint" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">Anti-Fingerprint (Canvas/WebGL/Audio)</span>
+                            </label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-micro-interactions" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">Micro-Interações Humanas (Mouse/Scroll)</span>
+                            </label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-skip-ads" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">Pular Anúncios Automaticamente</span>
+                            </label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-auto-continue" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">Superar 'Continuar Assistindo'</span>
+                            </label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-persistent-profiles" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">Perfis Persistentes (Salvar Sessão/Login)</span>
+                            </label>
+                            <div id="cookies-details-wrap"
+                                style="padding-left: 28px; margin-top: -4px; margin-bottom: 6px;">
+                                <input type="text" id="cookies-file-input"
+                                    placeholder="Arquivo de Cookies (ex: cookies.json)"
+                                    style="font-size: 0.8rem; padding: 6px 10px; width: 100%; border-radius: 6px; background: rgba(10,14,23,0.7); border: 1px solid var(--border-color); color: var(--text-primary);">
+                                <small class="hint" style="display: block; margin-top: 2px;">Opcional: Injeta cookies
+                                    exportados (JSON ou Netscape) na inicialização.</small>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-search-play" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">🔍 Modo Pesquisa Orgânica (Search & Play)</span>
+                            </label>
+                            <small class="hint"
+                                style="display: block; margin-top: -4px; margin-bottom: 8px; padding-left: 28px;">Busca
+                                o vídeo no YouTube e clica no resultado para registrar tráfego de busca no
+                                Studio.</small>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-block-media" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">Modo Ultra-Leve (Bloquear Imagens e Fontes)</span>
+                            </label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-auto-recovery" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">Auto-Recuperação de Player Travado / Buffering</span>
+                            </label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-headless" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">Modo Segundo Plano (Headless)</span>
+                            </label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-mute" checked>
+                                <span class="slider"></span>
+                                <span class="toggle-label">Silenciar Áudio (Mute)</span>
+                            </label>
                         </div>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-search-play" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">🔍 Modo Pesquisa Orgânica (Search & Play)</span>
-                        </label>
-                        <small class="hint" style="display: block; margin-top: -4px; margin-bottom: 8px; padding-left: 28px;">Busca o vídeo no YouTube e clica no resultado para registrar tráfego de busca no Studio.</small>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-block-media" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">Modo Ultra-Leve (Bloquear Imagens e Fontes)</span>
-                        </label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-auto-recovery" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">Auto-Recuperação de Player Travado / Buffering</span>
-                        </label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-headless" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">Modo Segundo Plano (Headless)</span>
-                        </label>
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="toggle-mute" checked>
-                            <span class="slider"></span>
-                            <span class="toggle-label">Silenciar Áudio (Mute)</span>
-                        </label>
                     </div>
-                </div>
 
-                <!-- Rede Corporativa, Agendador e CAPTCHA -->
-                <div class="card glass-card">
-                    <h3>🏢 Rede Corporativa, Agendador & CAPTCHA</h3>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggle-corporate-network">
-                        <span class="slider"></span>
-                        <span class="toggle-label">Modo Rede Corporativa (IP compartilhado)</span>
-                    </label>
-                    <small class="hint" style="display:block; margin: 4px 0 10px 28px;">Reduz concorrência, aumenta espaçamento e cooldown para evitar bloqueio do Google.</small>
+                    <!-- Rede Corporativa, Agendador e CAPTCHA -->
+                    <div class="card glass-card">
+                        <h3>🏢 Rede Corporativa, Agendador & CAPTCHA</h3>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-corporate-network">
+                            <span class="slider"></span>
+                            <span class="toggle-label">Modo Rede Corporativa (IP compartilhado)</span>
+                        </label>
+                        <small class="hint" style="display:block; margin: 4px 0 10px 28px;">Reduz concorrência, aumenta
+                            espaçamento e cooldown para evitar bloqueio do Google.</small>
 
-                    <div class="grid-2col">
-                        <div class="form-group">
-                            <label for="request-pacing-input">Pacing entre Requisições (s):</label>
-                            <input type="number" id="request-pacing-input" value="0" min="0" step="1">
+                        <div class="grid-2col">
+                            <div class="form-group">
+                                <label for="request-pacing-input">Pacing entre Requisições (s):</label>
+                                <input type="number" id="request-pacing-input" value="0" min="0" step="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="human-profile-select">Perfil de Comportamento:</label>
+                                <select id="human-profile-select">
+                                    <option value="mixed">Misto (aleatório)</option>
+                                    <option value="casual">Casual</option>
+                                    <option value="engaged">Engajado</option>
+                                    <option value="skimmer">Explorador</option>
+                                </select>
+                            </div>
                         </div>
+
+                        <div class="grid-2col">
+                            <div class="form-group">
+                                <label for="active-hours-start">Janela Ativa Início (h):</label>
+                                <input type="number" id="active-hours-start" value="" min="0" max="23"
+                                    placeholder="Ex: 8">
+                            </div>
+                            <div class="form-group">
+                                <label for="active-hours-end">Janela Ativa Fim (h):</label>
+                                <input type="number" id="active-hours-end" value="" min="0" max="23"
+                                    placeholder="Ex: 18">
+                            </div>
+                        </div>
+
                         <div class="form-group">
-                            <label for="human-profile-select">Perfil de Comportamento:</label>
-                            <select id="human-profile-select">
-                                <option value="mixed">Misto (aleatório)</option>
-                                <option value="casual">Casual</option>
-                                <option value="engaged">Engajado</option>
-                                <option value="skimmer">Explorador</option>
+                            <label for="captcha-provider-select">CAPTCHA Solver (opcional):</label>
+                            <select id="captcha-provider-select">
+                                <option value="">Desativado</option>
+                                <option value="2captcha">2Captcha</option>
+                                <option value="capsolver">CapSolver</option>
                             </select>
                         </div>
-                    </div>
-
-                    <div class="grid-2col">
                         <div class="form-group">
-                            <label for="active-hours-start">Janela Ativa Início (h):</label>
-                            <input type="number" id="active-hours-start" value="" min="0" max="23" placeholder="Ex: 8">
+                            <label for="captcha-api-key-input">Chave de API do Solver:</label>
+                            <input type="text" id="captcha-api-key-input" placeholder="API Key">
                         </div>
-                        <div class="form-group">
-                            <label for="active-hours-end">Janela Ativa Fim (h):</label>
-                            <input type="number" id="active-hours-end" value="" min="0" max="23" placeholder="Ex: 18">
+
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-telemetry" checked>
+                            <span class="slider"></span>
+                            <span class="toggle-label">Telemetria de Detecção</span>
+                        </label>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="actions-card">
+                        <button type="button" class="btn btn-primary" id="btn-start">
+                            <span class="btn-icon">▶</span> Iniciar Execução
+                        </button>
+                        <button type="button" class="btn btn-danger" id="btn-stop" disabled>
+                            <span class="btn-icon">🛑</span> Parar Bot
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Right Column: Realtime Dashboard & Logs -->
+                <section class="monitor-panel">
+                    <!-- Metrics Summary Cards -->
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-icon">⏱️</div>
+                            <div class="metric-info">
+                                <span class="metric-label">Watch Time Total</span>
+                                <strong class="metric-value" id="metric-watch-time">0h 00m</strong>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon">🎬</div>
+                            <div class="metric-info">
+                                <span class="metric-label">Sessões Concluídas</span>
+                                <strong class="metric-value" id="metric-sessions">0</strong>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon">🎯</div>
+                            <div class="metric-info">
+                                <span class="metric-label">Popups Superados</span>
+                                <strong class="metric-value" id="metric-popups">0</strong>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon">👥</div>
+                            <div class="metric-info">
+                                <span class="metric-label">Workers Ativos</span>
+                                <strong class="metric-value" id="metric-workers-active">0 / 0</strong>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="captcha-provider-select">CAPTCHA Solver (opcional):</label>
-                        <select id="captcha-provider-select">
-                            <option value="">Desativado</option>
-                            <option value="2captcha">2Captcha</option>
-                            <option value="capsolver">CapSolver</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="captcha-api-key-input">Chave de API do Solver:</label>
-                        <input type="text" id="captcha-api-key-input" placeholder="API Key">
+                    <!-- Active Workers Grid -->
+                    <div class="card glass-card workers-section">
+                        <div class="section-header">
+                            <h3>🖥️ Instâncias dos Workers em Tempo Real</h3>
+                            <span class="badge-status" id="bot-main-badge">Em Espera</span>
+                        </div>
+                        <div class="workers-grid" id="workers-container">
+                            <div class="empty-state" id="empty-workers-msg">
+                                Nenhum worker em execução. Configure e clique em "Iniciar Execução" para começar.
+                            </div>
+                        </div>
                     </div>
 
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="toggle-telemetry" checked>
-                        <span class="slider"></span>
-                        <span class="toggle-label">Telemetria de Detecção</span>
-                    </label>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="actions-card">
-                    <button type="button" class="btn btn-primary" id="btn-start">
-                        <span class="btn-icon">▶</span> Iniciar Execução
-                    </button>
-                    <button type="button" class="btn btn-danger" id="btn-stop" disabled>
-                        <span class="btn-icon">🛑</span> Parar Bot
-                    </button>
-                </div>
-            </section>
-
-            <!-- Right Column: Realtime Dashboard & Logs -->
-            <section class="monitor-panel">
-                <!-- Metrics Summary Cards -->
-                <div class="metrics-grid">
-                    <div class="metric-card">
-                        <div class="metric-icon">⏱️</div>
-                        <div class="metric-info">
-                            <span class="metric-label">Watch Time Total</span>
-                            <strong class="metric-value" id="metric-watch-time">0h 00m</strong>
+                    <!-- Realtime Log Terminal -->
+                    <div class="card glass-card terminal-section">
+                        <div class="terminal-header">
+                            <div class="terminal-title">
+                                <span class="terminal-dot red"></span>
+                                <span class="terminal-dot yellow"></span>
+                                <span class="terminal-dot green"></span>
+                                <span>Console de Eventos ao Vivo</span>
+                            </div>
+                            <div class="terminal-controls">
+                                <label class="autoscroll-toggle">
+                                    <input type="checkbox" id="toggle-autoscroll" checked> Auto-scroll
+                                </label>
+                                <button type="button" class="btn-xs btn-subtle" id="btn-clear-logs">Limpar</button>
+                            </div>
+                        </div>
+                        <div class="terminal-body" id="terminal-logs">
+                            <div class="log-line info">[00:00:00] [SISTEMA] Dashboard inicializado. Conexão WebSocket
+                                estabelecida.</div>
                         </div>
                     </div>
-                    <div class="metric-card">
-                        <div class="metric-icon">🎬</div>
-                        <div class="metric-info">
-                            <span class="metric-label">Sessões Concluídas</span>
-                            <strong class="metric-value" id="metric-sessions">0</strong>
-                        </div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-icon">🎯</div>
-                        <div class="metric-info">
-                            <span class="metric-label">Popups Superados</span>
-                            <strong class="metric-value" id="metric-popups">0</strong>
-                        </div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-icon">👥</div>
-                        <div class="metric-info">
-                            <span class="metric-label">Workers Ativos</span>
-                            <strong class="metric-value" id="metric-workers-active">0 / 0</strong>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Active Workers Grid -->
-                <div class="card glass-card workers-section">
-                    <div class="section-header">
-                        <h3>🖥️ Instâncias dos Workers em Tempo Real</h3>
-                        <span class="badge-status" id="bot-main-badge">Em Espera</span>
-                    </div>
-                    <div class="workers-grid" id="workers-container">
-                        <div class="empty-state" id="empty-workers-msg">
-                            Nenhum worker em execução. Configure e clique em "Iniciar Execução" para começar.
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Realtime Log Terminal -->
-                <div class="card glass-card terminal-section">
-                    <div class="terminal-header">
-                        <div class="terminal-title">
-                            <span class="terminal-dot red"></span>
-                            <span class="terminal-dot yellow"></span>
-                            <span class="terminal-dot green"></span>
-                            <span>Console de Eventos ao Vivo</span>
-                        </div>
-                        <div class="terminal-controls">
-                            <label class="autoscroll-toggle">
-                                <input type="checkbox" id="toggle-autoscroll" checked> Auto-scroll
-                            </label>
-                            <button type="button" class="btn-xs btn-subtle" id="btn-clear-logs">Limpar</button>
-                        </div>
-                    </div>
-                    <div class="terminal-body" id="terminal-logs">
-                        <div class="log-line info">[00:00:00] [SISTEMA] Dashboard inicializado. Conexão WebSocket estabelecida.</div>
-                    </div>
-                </div>
-            </section>
-        </main>
+                </section>
+            </main>
         </div> <!-- end view-live -->
 
         <!-- Historical Runs Panel -->
@@ -399,13 +432,16 @@
                     <div class="card-title-row">
                         <div>
                             <h3>📜 Registro Histórico de Execuções (SQLite)</h3>
-                            <p class="subtitle">Histórico consolidado com métricas, tempos reais e sessões detalhadas</p>
+                            <p class="subtitle">Histórico consolidado com métricas, tempos reais e sessões detalhadas
+                            </p>
                         </div>
                         <div class="history-actions">
-                            <button type="button" class="btn-sm btn-subtle" id="btn-refresh-history">🔄 Atualizar</button>
+                            <button type="button" class="btn-sm btn-subtle" id="btn-refresh-history">🔄
+                                Atualizar</button>
                             <button type="button" class="btn-sm btn-subtle" id="btn-export-csv">⬇️ CSV</button>
                             <button type="button" class="btn-sm btn-subtle" id="btn-export-json">⬇️ JSON</button>
-                            <button type="button" class="btn-sm btn-danger-subtle" id="btn-clear-history">🗑️ Limpar Histórico</button>
+                            <button type="button" class="btn-sm btn-danger-subtle" id="btn-clear-history">🗑️ Limpar
+                                Histórico</button>
                         </div>
                     </div>
 
@@ -482,4 +518,5 @@
 
     <script src="/static/app.js?v=4.0"></script>
 </body>
+
 </html>

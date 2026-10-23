@@ -110,12 +110,6 @@ async def simulate_human_micro_interactions(
             await page.mouse.wheel(0, -down_delta)
             await asyncio.sleep(random.uniform(0.5, 1.0))
 
-        # Simula mudanca de foco/visibilidade de forma sutil
-        if random.random() < 0.15:
-            try:
-                await page.evaluate("() => { document.dispatchEvent(new Event('visibilitychange')); }")
-            except Exception:
-                pass
 
     except Exception as e:
         logger.debug(f"[Worker {worker_id}] Excecao sutil na micro-interacao: {e}")

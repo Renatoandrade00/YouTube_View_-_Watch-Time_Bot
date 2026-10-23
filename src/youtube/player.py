@@ -181,9 +181,9 @@ async def watch_video(
     last_video_current_time: float | None = None
     stuck_buffer_count = 0
     sleep_duration = max(1.0, config.poll_interval)
-    stuck_level1_seconds = 10.0
-    stuck_level2_seconds = 20.0
-    stuck_level3_seconds = 30.0
+    stuck_level1_seconds = 15.0
+    stuck_level2_seconds = 35.0
+    stuck_level3_seconds = 60.0
     recovery_min_interval_seconds = 5.0
 
     while accumulated_watch_time < target_watch_seconds:
@@ -236,6 +236,10 @@ async def watch_video(
                 const video = document.querySelector('video');
                 const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
                 if (!video) return { exists: false };
+                const isAd = Boolean(
+                    document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-player-overlay') ||
+                    (player && player.classList && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting')))
+                );
                 return {
                     exists: true,
                     paused: video.paused,
@@ -243,7 +247,8 @@ async def watch_video(
                     currentTime: video.currentTime,
                     duration: video.duration,
                     readyState: video.readyState,
-                    playerState: player && typeof player.getPlayerState === 'function' ? player.getPlayerState() : -1
+                    playerState: player && typeof player.getPlayerState === 'function' ? player.getPlayerState() : -1,
+                    isAd: isAd
                 };
             }""")
 
@@ -253,9 +258,18 @@ async def watch_video(
                 is_paused = video_state.get("paused", False)
                 is_ended = video_state.get("ended", False)
                 p_state = video_state.get("playerState", -1)
+                is_ad = video_state.get("isAd", False)
 
-                if last_video_current_time is None:
-                    # Primeira leitura do player: estabelece referência sem contar tempo
+                if is_ad:
+                    if config.skip_ads:
+                        if await try_skip_ad(page):
+                            stats["ads_skipped"] += 1
+                    # Não trata anúncio como buffering travado do vídeo principal
+                    stuck_buffer_count = 0
+                    last_progress_time = current_now
+
+                elif last_video_current_time is None or current_ct < (last_video_current_time - 2.0):
+                    # Primeira leitura do player ou vídeo reiniciou/voltou (seek/reload/loop)
                     last_video_current_time = current_ct
                     last_progress_time = current_now
                     stuck_buffer_count = 0
@@ -289,12 +303,6 @@ async def watch_video(
                     except Exception as err:
                         logger.debug(f"[Worker {worker_id}] Erro ao reiniciar reprodução do vídeo: {err}")
 
-                elif last_video_current_time < 0:
-                    # Primeira iteração após carregamento
-                    last_video_current_time = current_ct
-                    stuck_buffer_count = 0
-                    accumulated_watch_time += elapsed_loop
-
                 elif is_paused or p_state == 2:
                     stuck_buffer_count += 1
                     await page.evaluate("""() => {
@@ -305,7 +313,6 @@ async def watch_video(
                         const v = document.querySelector('video');
                         if (v && v.paused) { v.play().catch(() => {}); }
                     }""")
-
 
                 else:
                     # Conta o avanço real do currentTime do player (watch time efetivo),
@@ -342,12 +349,13 @@ async def watch_video(
                         pass
                     elif no_progress_for >= stuck_level3_seconds:
                         logger.warning(
-                            f"[Worker {worker_id}] 🔄 Buffering infinito detectado (~{stuck_level3_seconds:.0f}s). "
+                            f"[Worker {worker_id}] 🔄 Buffering persistente sem avanço (~{stuck_level3_seconds:.0f}s). "
                             f"Recarregando página preservando tempo acumulado ({accumulated_watch_time:.0f}s)..."
                         )
                         last_recovery_time = current_now
                         stuck_buffer_count = 0
                         last_progress_time = current_now
+                        last_video_current_time = None
                         try:
                             await page.goto(url, wait_until="domcontentloaded", timeout=30000)
                             await asyncio.sleep(2.0)
@@ -359,7 +367,7 @@ async def watch_video(
                     elif no_progress_for >= stuck_level2_seconds:
                         logger.warning(
                             f"[Worker {worker_id}] ⚠️ Buffering persistente (~{stuck_level2_seconds:.0f}s). "
-                            "Forçando clique no player e avanço de frame..."
+                            "Forçando avanço sutil de frame e play..."
                         )
                         last_recovery_time = current_now
                         try:
@@ -378,14 +386,17 @@ async def watch_video(
 
                     elif no_progress_for >= stuck_level1_seconds:
                         logger.warning(
-                            f"[Worker {worker_id}] ⚠️ Player estagnado (~{stuck_level1_seconds:.0f}s). Acionando Play e atalho 'k'..."
+                            f"[Worker {worker_id}] ⚠️ Player estagnado (~{stuck_level1_seconds:.0f}s). Acionando playVideo()..."
                         )
                         last_recovery_time = current_now
                         try:
-                            await page.keyboard.press("k")
                             await page.evaluate("""() => {
+                                const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
+                                if (player && typeof player.playVideo === 'function') {
+                                    player.playVideo();
+                                }
                                 const v = document.querySelector('video');
-                                if (v) { v.play().catch(() => {}); }
+                                if (v && v.paused) { v.play().catch(() => {}); }
                             }""")
                         except Exception:
                             pass

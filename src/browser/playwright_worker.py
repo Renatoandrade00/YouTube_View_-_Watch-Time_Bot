@@ -201,6 +201,7 @@ class PlaywrightWorker:
                 }}""")
 
                 ESSENTIAL_PATTERNS = (
+                    "googlevideo.com",
                     "videoplayback",
                     "generate_204",
                     "api/stats",
@@ -216,7 +217,6 @@ class PlaywrightWorker:
                     "googleadservices.com",
                     "googlesyndication.com",
                     "adservice.google.com",
-                    "pagead",
                 )
 
                 async def _low_bandwidth_filter(route):

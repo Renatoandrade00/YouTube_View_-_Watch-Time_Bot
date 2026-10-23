@@ -353,6 +353,10 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
                 configurable: true
             }});
 
+            // Previne throttled playback e pausas automáticas do YouTube em headless
+            Object.defineProperty(document, 'hidden', {{ get: () => false, configurable: true }});
+            Object.defineProperty(document, 'visibilityState', {{ get: () => 'visible', configurable: true }});
+
             // Timezone spoofing via Intl
             try {{
                 const origResolved = Intl.DateTimeFormat.prototype.resolvedOptions;
