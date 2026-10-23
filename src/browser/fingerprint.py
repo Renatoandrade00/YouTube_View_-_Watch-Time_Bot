@@ -4,7 +4,9 @@ import json
 import random
 import time
 from dataclasses import dataclass
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
+from src.browser.stealth_profiles import generate_stealth_bundle, StealthBundle
 
 
 GPU_PROFILES = [
@@ -38,10 +40,8 @@ GPU_PROFILES = [
     },
 ]
 
-# Plataformas reais por frequência de uso (Win32 é a mais comum)
 PLATFORM_PROFILES: List[str] = ["Win32", "Win32", "Win32", "MacIntel", "Linux x86_64"]
 
-# Viewports comuns (inner size); outerHeight = inner + chrome UI (~88px)
 VIEWPORT_PROFILES = [
     {"inner_w": 1280, "inner_h": 720},
     {"inner_w": 1366, "inner_h": 768},
@@ -52,7 +52,6 @@ VIEWPORT_PROFILES = [
 
 @dataclass
 class FingerprintProfile:
-    """Perfil único de hardware e assinaturas de renderização por worker."""
     worker_id: int
     hardware_concurrency: int
     device_memory: int
@@ -60,48 +59,44 @@ class FingerprintProfile:
     gpu_renderer: str
     canvas_noise_seed: float
     audio_noise_seed: float
-    # Novos campos para stealth expandido
     outer_width: int
     outer_height: int
     platform: str
+    # Campos adicionais para coerencia de stealth (v2.7)
+    user_agent: str = ""
+    locale: str = "pt-BR"
+    timezone_id: str = "America/Sao_Paulo"
+    viewport_width: int = 1280
+    viewport_height: int = 720
+    device_scale_factor: float = 1.0
+    color_scheme: str = "light"
+
+
+def _bundle_to_profile(bundle: StealthBundle) -> FingerprintProfile:
+    return FingerprintProfile(
+        worker_id=bundle.worker_id,
+        hardware_concurrency=bundle.hardware_concurrency,
+        device_memory=bundle.device_memory,
+        gpu_vendor=bundle.gpu_vendor,
+        gpu_renderer=bundle.gpu_renderer,
+        canvas_noise_seed=bundle.canvas_noise_seed,
+        audio_noise_seed=bundle.audio_noise_seed,
+        outer_width=bundle.outer_width,
+        outer_height=bundle.outer_height,
+        platform=bundle.platform,
+        user_agent=bundle.user_agent,
+        locale=bundle.locale,
+        timezone_id=bundle.timezone_id,
+        viewport_width=bundle.viewport_width,
+        viewport_height=bundle.viewport_height,
+        device_scale_factor=bundle.device_scale_factor,
+        color_scheme=bundle.color_scheme,
+    )
 
 
 def generate_fingerprint_profile(worker_id: int) -> FingerprintProfile:
-    """
-    Gera um perfil de hardware variado por worker e por faixa horária.
-    O seed varia a cada hora, garantindo que o mesmo worker não mantenha
-    o mesmo fingerprint entre rodadas distintas — o que seria detectável
-    pelo YouTube como padrão de automação.
-    """
-    hour_bucket = int(time.time() // 3600)
-    rnd = random.Random(worker_id * 1000 + hour_bucket)
-
-    gpu = rnd.choice(GPU_PROFILES)
-    concurrency = rnd.choice([4, 6, 8, 12, 16])
-    memory = rnd.choice([8, 16, 32])
-    canvas_seed = rnd.uniform(0.0001, 0.0009)
-    audio_seed = rnd.uniform(0.000001, 0.000009)
-    platform = rnd.choice(PLATFORM_PROFILES)
-
-    vp = rnd.choice(VIEWPORT_PROFILES)
-    inner_w = vp["inner_w"]
-    inner_h = vp["inner_h"]
-    # outerHeight simula barra de título + abas + barra de endereços do Chrome (~88–100px)
-    outer_h = inner_h + rnd.randint(85, 102)
-    outer_w = inner_w  # outerWidth geralmente igual ao innerWidth
-
-    return FingerprintProfile(
-        worker_id=worker_id,
-        hardware_concurrency=concurrency,
-        device_memory=memory,
-        gpu_vendor=gpu["vendor"],
-        gpu_renderer=gpu["renderer"],
-        canvas_noise_seed=canvas_seed,
-        audio_noise_seed=audio_seed,
-        outer_width=outer_w,
-        outer_height=outer_h,
-        platform=platform,
-    )
+    bundle = generate_stealth_bundle(worker_id)
+    return _bundle_to_profile(bundle)
 
 
 def build_stealth_injection_script(profile: FingerprintProfile) -> str:
@@ -112,7 +107,7 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
     - Emula PluginArray e MimeTypeArray herdando dos protótipos nativos do Chromium
     - Emula objeto window.chrome real com app, csi, loadTimes e runtime
     - Spoofa WebGL Vendor/Renderer sem adulterar buffers determinísticos de Canvas/Audio
-    - Emula dimensões realistas de janela desktop e idiomas
+    - Emula dimensões realistas de janela desktop, tela e timezone
     """
     profile_data = {
         "concurrency": profile.hardware_concurrency,
@@ -122,10 +117,18 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
         "outerWidth": profile.outer_width,
         "outerHeight": profile.outer_height,
         "platform": profile.platform,
+        "locale": profile.locale,
+        "timezone": profile.timezone_id,
+        "screenWidth": profile.viewport_width,
+        "screenHeight": profile.viewport_height,
+        "deviceScaleFactor": profile.device_scale_factor,
     }
 
     return f"""(() => {{
         const config = {json.dumps(profile_data)};
+        // navigator.webdriver
+        // UNMASKED_VENDOR_WEBGL
+        // UNMASKED_RENDERER_WEBGL
 
         // 1. Mascara navigator.webdriver sem criar own property em navigator
         try {{
@@ -198,9 +201,7 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
             if (!proto) return;
             const originalGetParameter = proto.getParameter;
             proto.getParameter = function(param) {{
-                // UNMASKED_VENDOR_WEBGL
                 if (param === 37445) return config.vendor;
-                // UNMASKED_RENDERER_WEBGL
                 if (param === 37446) return config.renderer;
                 return originalGetParameter.apply(this, arguments);
             }};
@@ -232,7 +233,7 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
                 p.item = function(index) {{ return this[index] || null; }};
                 p.namedItem = function(name) {{
                     for (let i = 0; i < this.length; i++) {{
-                        if (this[i].type === name) return this[i];
+                        if (this[i].name === name) return this[i];
                     }}
                     return null;
                 }};
@@ -317,8 +318,10 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
         // 6. Configurações complementares de ambiente Desktop
         try {{
             const navProto = Object.getPrototypeOf(navigator) || navigator;
+            const primaryLocale = config.locale || 'pt-BR';
+            const baseLang = primaryLocale.split('-')[0];
             Object.defineProperty(navProto, 'languages', {{
-                get: () => ['pt-BR', 'pt', 'en-US', 'en'],
+                get: () => [primaryLocale, baseLang, 'en-US', 'en'],
                 configurable: true,
                 enumerable: true
             }});
@@ -338,7 +341,26 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
                 configurable: true
             }});
 
+            Object.defineProperty(screen, 'width', {{ get: () => config.screenWidth, configurable: true }});
+            Object.defineProperty(screen, 'height', {{ get: () => config.screenHeight, configurable: true }});
+            Object.defineProperty(screen, 'availWidth', {{ get: () => config.screenWidth, configurable: true }});
+            Object.defineProperty(screen, 'availHeight', {{ get: () => config.screenHeight - 40, configurable: true }});
             Object.defineProperty(screen, 'colorDepth', {{ get: () => 24, configurable: true }});
             Object.defineProperty(screen, 'pixelDepth', {{ get: () => 24, configurable: true }});
+
+            Object.defineProperty(window, 'devicePixelRatio', {{
+                get: () => config.deviceScaleFactor,
+                configurable: true
+            }});
+
+            // Timezone spoofing via Intl
+            try {{
+                const origResolved = Intl.DateTimeFormat.prototype.resolvedOptions;
+                Intl.DateTimeFormat.prototype.resolvedOptions = function() {{
+                    const opts = origResolved.apply(this, arguments);
+                    opts.timeZone = config.timezone;
+                    return opts;
+                }};
+            }} catch(e) {{}}
         }} catch(e) {{}}
     }})();"""

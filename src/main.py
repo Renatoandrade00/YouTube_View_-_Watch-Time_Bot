@@ -171,6 +171,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Desativar modo Search & Play (usar navegação direta)",
     )
 
+    # Rede corporativa e detecção
+    parser.add_argument("--corporate-network", dest="corporate_network_mode", action="store_true", default=None, help="Modo seguro para rede corporativa com IP compartilhado")
+    parser.add_argument("--request-pacing", dest="request_pacing_seconds", type=float, default=None, help="Pausa mínima entre requisições por worker (segundos)")
+    parser.add_argument("--human-profile", dest="human_behavior_profile", type=str, default=None, help="Perfil de comportamento humano (mixed, casual, engaged, skimmer)")
+    parser.add_argument("--active-hours", dest="active_hours", type=str, default=None, help="Janela de atividade no formato HH-HH (ex: 08-18)")
+    parser.add_argument("--captcha-solver", dest="captcha_solver_provider", type=str, default=None, help="Provedor de CAPTCHA (2captcha, capsolver)")
+    parser.add_argument("--captcha-api-key", dest="captcha_solver_api_key", type=str, default=None, help="Chave de API do solver de CAPTCHA")
+
     # Argumentos do Modo Visual Web
     parser.add_argument("--web", "--gui", dest="web_mode", action="store_true", default=False, help="Iniciar painel de controle visual no navegador")
     parser.add_argument("--port", type=int, default=8000, help="Porta para o servidor web (padrão: 8000)")
@@ -221,6 +229,16 @@ async def main_async() -> None:
     if args.max_watch_min is not None:
         max_watch = int(args.max_watch_min * 60)
 
+    active_hours_start = None
+    active_hours_end = None
+    if getattr(args, "active_hours", None):
+        try:
+            start_str, end_str = args.active_hours.split("-", 1)
+            active_hours_start = int(start_str)
+            active_hours_end = int(end_str)
+        except Exception:
+            pass
+
     cli_overrides = {
         "target_url": args.url,
         "urls_file": args.urls_file,
@@ -247,6 +265,13 @@ async def main_async() -> None:
         "block_heavy_media": args.block_heavy_media,
         "auto_player_recovery": args.auto_player_recovery,
         "search_and_play": args.search_and_play,
+        "corporate_network_mode": args.corporate_network_mode,
+        "request_pacing_seconds": args.request_pacing_seconds,
+        "human_behavior_profile": args.human_behavior_profile,
+        "active_hours_start": active_hours_start,
+        "active_hours_end": active_hours_end,
+        "captcha_solver_provider": args.captcha_solver_provider,
+        "captcha_solver_api_key": args.captcha_solver_api_key,
     }
 
     try:

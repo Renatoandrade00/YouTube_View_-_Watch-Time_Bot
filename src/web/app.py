@@ -8,7 +8,9 @@ import logging
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+import csv
+import io
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -84,6 +86,17 @@ class StartBotRequest(BaseModel):
     block_heavy_media: bool = Field(default=True)
     auto_player_recovery: bool = Field(default=True)
     search_and_play: bool = Field(default=False)
+
+    # Rede corporativa e detecção
+    corporate_network_mode: bool = Field(default=False)
+    request_pacing_seconds: float = Field(default=0.0, ge=0.0)
+    human_behavior_profile: str = Field(default="mixed")
+    active_hours_start: Optional[int] = Field(default=None, ge=0, le=23)
+    active_hours_end: Optional[int] = Field(default=None, ge=0, le=23)
+    active_days: List[int] = Field(default_factory=list)
+    captcha_solver_provider: Optional[str] = Field(default=None)
+    captcha_solver_api_key: Optional[str] = Field(default=None)
+    telemetry_enabled: bool = Field(default=True)
 
 
 
@@ -242,6 +255,15 @@ async def start_bot(req: StartBotRequest) -> Dict[str, Any]:
         auto_player_recovery=req.auto_player_recovery,
         search_and_play=req.search_and_play,
         custom_keywords=custom_keywords_map,
+        corporate_network_mode=req.corporate_network_mode,
+        request_pacing_seconds=req.request_pacing_seconds,
+        human_behavior_profile=req.human_behavior_profile,
+        active_hours_start=req.active_hours_start,
+        active_hours_end=req.active_hours_end,
+        active_days=req.active_days,
+        captcha_solver_provider=req.captcha_solver_provider,
+        captcha_solver_api_key=req.captcha_solver_api_key,
+        telemetry_enabled=req.telemetry_enabled,
     )
 
     tracker = MetricsTracker()
@@ -321,6 +343,39 @@ async def clear_all_history() -> Dict[str, Any]:
     db = DatabaseManager.get_instance()
     count = db.clear_history()
     return {"status": "cleared", "deleted_count": count}
+
+
+@app.get("/api/export/runs.csv")
+async def export_runs_csv() -> StreamingResponse:
+    db = DatabaseManager.get_instance()
+    runs = db.get_all_runs(limit=10000, offset=0)
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    if runs:
+        writer.writerow(list(runs[0].keys()))
+        for run in runs:
+            writer.writerow(list(run.values()))
+    buffer.seek(0)
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=runs.csv"},
+    )
+
+
+@app.get("/api/export/runs.json")
+async def export_runs_json() -> Dict[str, Any]:
+    db = DatabaseManager.get_instance()
+    runs = db.get_all_runs(limit=10000, offset=0)
+    stats = db.get_run_summary_stats()
+    return {"runs": runs, "stats": stats}
+
+
+@app.get("/api/telemetry")
+async def get_telemetry() -> Dict[str, Any]:
+    from src.utils.telemetry import get_collector
+    collector = get_collector()
+    return {"summary": collector.summary(), "recent": collector.recent()}
 
 
 @app.websocket("/ws/live")

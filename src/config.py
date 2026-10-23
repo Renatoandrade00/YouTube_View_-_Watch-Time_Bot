@@ -36,6 +36,7 @@ class BotConfig(BaseModel):
 
     enable_anti_fingerprint: bool = Field(default=True, description="Ativar injeção de perfis anti-fingerprint (Canvas, WebGL, Audio)")
     enable_micro_interactions: bool = Field(default=True, description="Ativar micro-interações humanas (mouse, scroll, hover)")
+    human_behavior_profile: str = Field(default="mixed", description="Perfil de comportamento humano (mixed, casual, engaged, skimmer)")
     min_delay_between_videos: float = Field(default=5.0, ge=1.0, description="Pausa mínima entre vídeos em segundos")
     max_delay_between_videos: float = Field(default=15.0, ge=1.0, description="Pausa máxima entre vídeos em segundos")
     worker_stagger_delay: float = Field(default=15.0, ge=0.0, description="Tempo de espera (em segundos) entre a inicialização de cada worker consecutivo para evitar sobrecarga de rede e detecção")
@@ -54,6 +55,22 @@ class BotConfig(BaseModel):
     block_heavy_media: bool = Field(default=True, description="Modo ultra-leve global: bloquear imagens não essenciais, fontes e avatares para reduzir consumo de CPU/RAM e banda")
     auto_player_recovery: bool = Field(default=True, description="Recuperação automática do player em caso de buffering infinito ou travamento de reprodução")
     search_and_play: bool = Field(default=False, description="Modo Search & Play: pesquisa orgânica no YouTube antes de clicar no vídeo para simular tráfego de busca")
+
+    # Rede corporativa compartilhada (muitos computadores no mesmo IP público)
+    corporate_network_mode: bool = Field(default=False, description="Modo seguro para rede corporativa com muitos computadores compartilhando o mesmo IP")
+    corporate_max_workers: int = Field(default=8, ge=1, le=50, description="Limite de workers simultâneos em rede corporativa")
+    request_pacing_seconds: float = Field(default=0.0, ge=0.0, description="Pausa mínima entre requisições por worker para evitar detecção em IP compartilhado")
+    shared_ip_cooldown_minutes: float = Field(default=10.0, ge=1.0, description="Cooldown para IP compartilhado após bloqueio do Google")
+
+    # Agendador de janelas de audiência
+    active_hours_start: Optional[int] = Field(default=None, ge=0, le=23, description="Hora inicial da janela de atividade (0-23)")
+    active_hours_end: Optional[int] = Field(default=None, ge=0, le=23, description="Hora final da janela de atividade (0-23)")
+    active_days: List[int] = Field(default_factory=list, description="Dias da semana ativos (0=segunda ... 6=domingo)")
+
+    # CAPTCHA solver opcional
+    captcha_solver_provider: Optional[str] = Field(default=None, description="Provedor de CAPTCHA (2captcha, capsolver)")
+    captcha_solver_api_key: Optional[str] = Field(default=None, description="Chave de API do solver de CAPTCHA")
+    telemetry_enabled: bool = Field(default=True, description="Coletar telemetria de detecção do player")
     custom_keywords: Dict[str, str] = Field(default_factory=dict, description="Mapeamento de URL para palavra-chave customizada de busca")
 
     @field_validator("max_watch")
@@ -217,6 +234,12 @@ def load_config(
         "WORKER_STAGGER_DELAY": ("worker_stagger_delay", float),
         "SEARCH_AND_PLAY": ("search_and_play", lambda v: v.lower() in ("true", "1", "yes")),
         "BLOCK_HEAVY_MEDIA": ("block_heavy_media", lambda v: v.lower() in ("true", "1", "yes")),
+        "CORPORATE_NETWORK_MODE": ("corporate_network_mode", lambda v: v.lower() in ("true", "1", "yes")),
+        "REQUEST_PACING_SECONDS": ("request_pacing_seconds", float),
+        "HUMAN_BEHAVIOR_PROFILE": ("human_behavior_profile", str),
+        "CAPTCHA_SOLVER_PROVIDER": ("captcha_solver_provider", str),
+        "CAPTCHA_SOLVER_API_KEY": ("captcha_solver_api_key", str),
+        "TELEMETRY_ENABLED": ("telemetry_enabled", lambda v: v.lower() in ("true", "1", "yes")),
         "AUTO_PLAYER_RECOVERY": ("auto_player_recovery", lambda v: v.lower() in ("true", "1", "yes")),
         "USE_PERSISTENT_PROFILES": ("use_persistent_profiles", lambda v: v.lower() in ("true", "1", "yes")),
         "PROFILES_DIR": ("profiles_dir", str),

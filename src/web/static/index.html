@@ -213,6 +213,63 @@
                     </div>
                 </div>
 
+                <!-- Rede Corporativa, Agendador e CAPTCHA -->
+                <div class="card glass-card">
+                    <h3>🏢 Rede Corporativa, Agendador & CAPTCHA</h3>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-corporate-network">
+                        <span class="slider"></span>
+                        <span class="toggle-label">Modo Rede Corporativa (IP compartilhado)</span>
+                    </label>
+                    <small class="hint" style="display:block; margin: 4px 0 10px 28px;">Reduz concorrência, aumenta espaçamento e cooldown para evitar bloqueio do Google.</small>
+
+                    <div class="grid-2col">
+                        <div class="form-group">
+                            <label for="request-pacing-input">Pacing entre Requisições (s):</label>
+                            <input type="number" id="request-pacing-input" value="0" min="0" step="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="human-profile-select">Perfil de Comportamento:</label>
+                            <select id="human-profile-select">
+                                <option value="mixed">Misto (aleatório)</option>
+                                <option value="casual">Casual</option>
+                                <option value="engaged">Engajado</option>
+                                <option value="skimmer">Explorador</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid-2col">
+                        <div class="form-group">
+                            <label for="active-hours-start">Janela Ativa Início (h):</label>
+                            <input type="number" id="active-hours-start" value="" min="0" max="23" placeholder="Ex: 8">
+                        </div>
+                        <div class="form-group">
+                            <label for="active-hours-end">Janela Ativa Fim (h):</label>
+                            <input type="number" id="active-hours-end" value="" min="0" max="23" placeholder="Ex: 18">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="captcha-provider-select">CAPTCHA Solver (opcional):</label>
+                        <select id="captcha-provider-select">
+                            <option value="">Desativado</option>
+                            <option value="2captcha">2Captcha</option>
+                            <option value="capsolver">CapSolver</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="captcha-api-key-input">Chave de API do Solver:</label>
+                        <input type="text" id="captcha-api-key-input" placeholder="API Key">
+                    </div>
+
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="toggle-telemetry" checked>
+                        <span class="slider"></span>
+                        <span class="toggle-label">Telemetria de Detecção</span>
+                    </label>
+                </div>
+
                 <!-- Action Buttons -->
                 <div class="actions-card">
                     <button type="button" class="btn btn-primary" id="btn-start">
@@ -346,6 +403,8 @@
                         </div>
                         <div class="history-actions">
                             <button type="button" class="btn-sm btn-subtle" id="btn-refresh-history">🔄 Atualizar</button>
+                            <button type="button" class="btn-sm btn-subtle" id="btn-export-csv">⬇️ CSV</button>
+                            <button type="button" class="btn-sm btn-subtle" id="btn-export-json">⬇️ JSON</button>
                             <button type="button" class="btn-sm btn-danger-subtle" id="btn-clear-history">🗑️ Limpar Histórico</button>
                         </div>
                     </div>

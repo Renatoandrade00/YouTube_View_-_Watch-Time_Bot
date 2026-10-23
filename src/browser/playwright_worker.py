@@ -128,10 +128,32 @@ class PlaywrightWorker:
 
         browser = await self._ensure_browser()
 
+        profile = None
+        if getattr(self.config, "enable_anti_fingerprint", True):
+            profile = generate_fingerprint_profile(self.worker_id)
+
+        if profile is not None:
+            user_agent = profile.user_agent
+            viewport = {"width": profile.viewport_width, "height": profile.viewport_height}
+            locale = profile.locale
+            timezone_id = profile.timezone_id
+            device_scale_factor = profile.device_scale_factor
+            color_scheme = profile.color_scheme
+        else:
+            user_agent = get_random_user_agent()
+            viewport = get_random_viewport()
+            locale = "pt-BR"
+            timezone_id = "America/Sao_Paulo"
+            device_scale_factor = 1.0
+            color_scheme = "light"
+
         context_kwargs: Dict[str, Any] = {
-            "user_agent": get_random_user_agent(),
-            "viewport": get_random_viewport(),
-            "locale": "pt-BR",
+            "user_agent": user_agent,
+            "viewport": viewport,
+            "locale": locale,
+            "timezone_id": timezone_id,
+            "device_scale_factor": device_scale_factor,
+            "color_scheme": color_scheme,
         }
 
         profile_state_path: Optional[Path] = None
@@ -294,6 +316,7 @@ class PlaywrightWorker:
                 worker_id=self.worker_id,
                 stop_event=stop_event,
                 max_end_time=max_end_time,
+                session_id=session_id,
             )
             stats["target_watch_time"] = target_watch_time
             stats["url"] = normalized_url

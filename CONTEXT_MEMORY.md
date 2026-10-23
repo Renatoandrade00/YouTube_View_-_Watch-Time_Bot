@@ -1,7 +1,7 @@
 # MemÃ³ria de Contexto do Projeto: YouTube View & Watch-Time Bot
 
 > **Data de AtualizaÃ§Ã£o:** Outubro de 2026  
-> **VersÃ£o do Projeto:** 2.7.1 Watch-Time Analytics & BotGuard Integrity Shield (Conformidade com ProtÃ³tipos Nativos PluginArray + InterceptaÃ§Ã£o Graciosa de AnÃºncios sem ERR_FAILED + LiberaÃ§Ã£o de generate_204 + lact ContÃ­nuo < 15s + Ãudio Positivo + Search & Play e Perfis Ativos por PadrÃ£o + Player API Nativa sem Toggles de Play/Pause)  
+> **Versao do Projeto:** 2.8 Corporate Network, Advanced Stealth & BotGuard Integrity Shield (Perfis Coerentes + Humanizacao Adaptativa + Telemetria + Exportacao + Agendador + CAPTCHA Solver + Modo Rede Corporativa + Prototipos Nativos PluginArray + Contagem Real currentTime)
 > **Status dos Testes:** 76/76 testes passando (100% de sucesso)  
 > **Auditoria UI/UX:** Aprovado via Skill Impeccable (`impeccable detect` com 0 violaÃ§Ãµes, conformidade WCAG AA)  
 > **RepositÃ³rio:** `Renatoandrade00/YouTube_View_-_Watch-Time_Bot`
@@ -243,3 +243,18 @@ Todas as prioridades essenciais de rede, alta concorrÃªncia, performance, automa
   - ConfiguraÃ§Ã£o de horÃ¡rios de atividade programados (ex: picos de audiÃªncia diurnos vs. repouso durante a madrugada) para simulaÃ§Ã£o de curvas orgÃ¢nicas de pÃºblico.
 - [ ] **IntegraÃ§Ã£o com Solvers Externos de CAPTCHA (2Captcha / CapSolver):**
   - MÃ³dulo opcional para resoluÃ§Ã£o automÃ¡tica de reCAPTCHA em casos de redes sem acesso a proxies residenciais limpos.
+
+
+## 7. Atualização v2.7 (rede corporativa e stealth avançado)
+- Perfis stealth coerentes (UA, plataforma, locale, timezone, viewport, DPR, cor).
+- Humanização com perfis de comportamento (casual, engaged, skimmer).
+- Telemetria de detecção (bloqueios, buffering) e endpoint /api/telemetry.
+- Exportação CSV/JSON do histórico.
+- Agendador de janelas de audiência.
+- CAPTCHA solver opcional (2Captcha/CapSolver).
+- Modo rede corporativa com limites de concorrência, pacing e cooldown compartilhado.
+- Testes: 82 passando.
+
+- Contagem de watch time baseada no currentTime real do player (delta de progresso) em vez de apenas tempo de parede.
+- Recuperação de buffering baseada em tempo sem progresso (10s/20s/30s) com intervalo mínimo entre tentativas.
+- Preservação de tempo acumulado em recargas e reinícios de vídeo.
