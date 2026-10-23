@@ -78,8 +78,15 @@ class PlaywrightWorker:
             if proxy_dict:
                 launch_kwargs["proxy"] = proxy_dict
 
-            self._browser = await self._playwright.chromium.launch(**launch_kwargs)
-            logger.info(f"[Worker {self.worker_id}] ⚡ Instância Chromium iniciada e ativa para reuso.")
+            try:
+                launch_kwargs["channel"] = "chrome"
+                self._browser = await self._playwright.chromium.launch(**launch_kwargs)
+                logger.info(f"[Worker {self.worker_id}] ⚡ Google Chrome real iniciado e ativo para reuso.")
+            except Exception as chrome_err:
+                logger.debug(f"[Worker {self.worker_id}] Google Chrome não disponível ({chrome_err}). Utilizando Chromium Playwright.")
+                launch_kwargs.pop("channel", None)
+                self._browser = await self._playwright.chromium.launch(**launch_kwargs)
+                logger.info(f"[Worker {self.worker_id}] ⚡ Instância Chromium iniciada e ativa para reuso.")
             return self._browser
 
     async def update_proxy(self, new_proxy_url: Optional[str]) -> None:

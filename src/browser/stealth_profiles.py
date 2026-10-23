@@ -47,7 +47,7 @@ VIEWPORTS = [
     (1920, 1080),
 ]
 
-CHROME_VERSIONS = [122, 123, 124, 125, 126]
+CHROME_VERSIONS = [126, 128, 130, 131, 132]
 
 
 @dataclass
@@ -76,7 +76,8 @@ def generate_stealth_bundle(worker_id: int, hour_bucket: int | None = None) -> S
         hour_bucket = int(time.time() // 3600)
     rnd = random.Random(worker_id * 1009 + hour_bucket * 17)
 
-    platform = rnd.choice(["Win32", "Win32", "Win32", "MacIntel", "Linux x86_64"])
+    # Garante coerência entre Direct3D11 da GPU e plataforma Windows
+    platform = "Win32"
     platform_info = PLATFORM_BUNDLES[platform]
     chrome_ver = rnd.choice(CHROME_VERSIONS)
     ua_template = rnd.choice(platform_info["user_agents"])

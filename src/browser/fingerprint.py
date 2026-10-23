@@ -129,82 +129,89 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
         // navigator.webdriver
         // UNMASKED_VENDOR_WEBGL
         // UNMASKED_RENDERER_WEBGL
+        // PluginArray
+        // plugins
+        // mimeTypes
+        // languages
+        // platform
+        // outerWidth
+        // outerHeight
+        // colorDepth
+        // window.chrome
 
-        // 1. Mascara navigator.webdriver sem criar own property em navigator
+        // Helper para emular [native code] em funções modificadas
+        const makeNative = (fn, name) => {{
+            try {{
+                Object.defineProperty(fn, 'name', {{ value: name || 'get' }});
+                Object.defineProperty(fn, 'toString', {{
+                    value: function() {{ return `function ${{name || ''}}() {{ [native code] }}`; }},
+                    configurable: true,
+                    writable: true
+                }});
+            }} catch(e) {{}}
+            return fn;
+        }};
+
+        // 1. navigator.webdriver: preserva integridade nativa do Chrome
         try {{
-            const proto = Object.getPrototypeOf(navigator);
-            if (proto && proto.hasOwnProperty('webdriver')) {{
-                delete proto.webdriver;
+            if (navigator.webdriver === true) {{
+                const proto = Object.getPrototypeOf(navigator) || navigator;
+                const getWd = makeNative(() => false, 'get webdriver');
+                Object.defineProperty(proto, 'webdriver', {{
+                    get: getWd,
+                    configurable: true,
+                    enumerable: true
+                }});
             }}
-            Object.defineProperty(proto || navigator, 'webdriver', {{
-                get: () => undefined,
-                configurable: true,
-                enumerable: true
-            }});
         }} catch(e) {{}}
 
         // 2. Hardware: Cores e Memória RAM
         try {{
             const proto = Object.getPrototypeOf(navigator) || navigator;
-            Object.defineProperty(proto, 'hardwareConcurrency', {{
-                get: () => config.concurrency,
-                configurable: true,
-                enumerable: true
-            }});
-            Object.defineProperty(proto, 'deviceMemory', {{
-                get: () => config.memory,
-                configurable: true,
-                enumerable: true
-            }});
+            if (!navigator.hardwareConcurrency || navigator.hardwareConcurrency < 2) {{
+                const getHc = makeNative(() => config.concurrency, 'get hardwareConcurrency');
+                Object.defineProperty(proto, 'hardwareConcurrency', {{
+                    get: getHc,
+                    configurable: true,
+                    enumerable: true
+                }});
+            }}
+            if (!navigator.deviceMemory) {{
+                const getDm = makeNative(() => config.memory, 'get deviceMemory');
+                Object.defineProperty(proto, 'deviceMemory', {{
+                    get: getDm,
+                    configurable: true,
+                    enumerable: true
+                }});
+            }}
         }} catch(e) {{}}
 
-        // 3. Emulação completa e realista de window.chrome
+        // 3. Emulação não-intrusiva de window.chrome (só se ausente)
         try {{
             if (!window.chrome) {{
-                window.chrome = {{}};
-            }}
-            window.chrome.app = {{
-                isInstalled: false,
-                InstallState: {{ DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' }},
-                RunningState: {{ CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' }}
-            }};
-            window.chrome.csi = function() {{
-                return {{ startE: Date.now(), onloadT: Date.now() + 100, pageT: 500, tran: 15 }};
-            }};
-            window.chrome.loadTimes = function() {{
-                return {{
-                    requestTime: Date.now() / 1000,
-                    startLoadTime: Date.now() / 1000,
-                    commitLoadTime: Date.now() / 1000 + 0.1,
-                    finishDocumentLoadTime: Date.now() / 1000 + 0.3,
-                    firstPaintTime: Date.now() / 1000 + 0.35,
-                    finishLoadTime: Date.now() / 1000 + 0.45,
-                    wasFetchedViaSpdy: true,
-                    wasNpnNegotiated: true,
-                    npnNegotiatedProtocol: 'h2',
-                    wasAlternateProtocolAvailable: false,
-                    connectionInfo: 'h2'
+                window.chrome = {{
+                    app: {{ isInstalled: false }},
+                    runtime: {{
+                        OnInstalledReason: {{ CHROME_UPDATE: 'chrome_update', INSTALL: 'install' }},
+                        PlatformArch: {{ X86_64: 'x86-64' }},
+                        PlatformOs: {{ WIN: 'win' }}
+                    }}
                 }};
-            }};
-            window.chrome.runtime = {{
-                OnInstalledReason: {{ CHROME_UPDATE: 'chrome_update', INSTALL: 'install', SHARED_MODULE_UPDATE: 'shared_module_update', UPDATE: 'update' }},
-                OnRestartRequiredReason: {{ APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' }},
-                PlatformArch: {{ ARM: 'arm', ARM64: 'arm64', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' }},
-                PlatformNaclArch: {{ ARM: 'arm', MIPS: 'mips', MIPS64: 'mips64', X86_32: 'x86-32', X86_64: 'x86-64' }},
-                PlatformOs: {{ ANDROID: 'android', CROS: 'cros', FUCHSIA: 'fuchsia', LINUX: 'linux', MAC: 'mac', OPENBSD: 'openbsd', WIN: 'win' }},
-                RequestUpdateCheckStatus: {{ NO_UPDATE: 'no_update', THROTTLED: 'throttled', UPDATE_AVAILABLE: 'update_available' }}
-            }};
+            }}
         }} catch(e) {{}}
 
-        // 4. Spoofing de WebGL (Vendor e Renderer da GPU)
+        // 4. Spoofing de WebGL preservando assinatura [native code]
         const overrideWebGL = (proto) => {{
-            if (!proto) return;
+            if (!proto || proto._stealthPatched) return;
+            proto._stealthPatched = true;
             const originalGetParameter = proto.getParameter;
-            proto.getParameter = function(param) {{
+            const customGetParameter = function(param) {{
                 if (param === 37445) return config.vendor;
                 if (param === 37446) return config.renderer;
                 return originalGetParameter.apply(this, arguments);
             }};
+            makeNative(customGetParameter, 'getParameter');
+            proto.getParameter = customGetParameter;
         }};
 
         try {{
@@ -212,107 +219,26 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
             overrideWebGL(window.WebGL2RenderingContext?.prototype);
         }} catch(e) {{}}
 
-        // 5. Plugins e MimeTypes conformes com herança nativa de protótipo
+        // 5. Plugins e MimeTypes conformes com herança nativa
         try {{
-            const pluginArrayProto = window.PluginArray ? window.PluginArray.prototype : Object.prototype;
-            const pluginProto = window.Plugin ? window.Plugin.prototype : Object.prototype;
-            const mimeTypeArrayProto = window.MimeTypeArray ? window.MimeTypeArray.prototype : Object.prototype;
-            const mimeTypeProto = window.MimeType ? window.MimeType.prototype : Object.prototype;
-
-            function createPlugin(data) {{
-                const p = Object.create(pluginProto);
-                Object.defineProperties(p, {{
-                    name: {{ value: data.name, enumerable: true }},
-                    filename: {{ value: data.filename, enumerable: true }},
-                    description: {{ value: data.description, enumerable: true }},
-                    length: {{ value: data.mimeTypes.length, enumerable: true }}
+            if (!navigator.plugins || navigator.plugins.length === 0) {{
+                const pluginArrayProto = window.PluginArray ? window.PluginArray.prototype : Object.prototype;
+                const mimeTypeArrayProto = window.MimeTypeArray ? window.MimeTypeArray.prototype : Object.prototype;
+                const pluginsList = Object.create(pluginArrayProto);
+                Object.defineProperty(pluginsList, 'length', {{ value: 3, enumerable: false }});
+                Object.defineProperty(Object.getPrototypeOf(navigator) || navigator, 'plugins', {{
+                    get: makeNative(() => pluginsList, 'get plugins'),
+                    configurable: true,
+                    enumerable: true
                 }});
-                data.mimeTypes.forEach((m, idx) => {{
-                    p[idx] = m;
+                const mimeList = Object.create(mimeTypeArrayProto);
+                Object.defineProperty(mimeList, 'length', {{ value: 2, enumerable: false }});
+                Object.defineProperty(Object.getPrototypeOf(navigator) || navigator, 'mimeTypes', {{
+                    get: makeNative(() => mimeList, 'get mimeTypes'),
+                    configurable: true,
+                    enumerable: true
                 }});
-                p.item = function(index) {{ return this[index] || null; }};
-                p.namedItem = function(name) {{
-                    for (let i = 0; i < this.length; i++) {{
-                        if (this[i].name === name) return this[i];
-                    }}
-                    return null;
-                }};
-                return p;
             }}
-
-            function createMimeType(data) {{
-                const m = Object.create(mimeTypeProto);
-                Object.defineProperties(m, {{
-                    type: {{ value: data.type, enumerable: true }},
-                    suffixes: {{ value: data.suffixes, enumerable: true }},
-                    description: {{ value: data.description, enumerable: true }},
-                    enabledPlugin: {{ value: data.enabledPlugin, writable: true, enumerable: true }}
-                }});
-                return m;
-            }}
-
-            const pdfMime = createMimeType({{ type: 'application/pdf', suffixes: 'pdf', description: 'Portable Document Format', enabledPlugin: null }});
-            const textPdfMime = createMimeType({{ type: 'text/pdf', suffixes: 'pdf', description: 'Portable Document Format', enabledPlugin: null }});
-
-            const pdfPlugin = createPlugin({{
-                name: 'PDF Viewer',
-                filename: 'internal-pdf-viewer',
-                description: 'Portable Document Format',
-                mimeTypes: [pdfMime, textPdfMime]
-            }});
-            const chromePdf = createPlugin({{
-                name: 'Chrome PDF Viewer',
-                filename: 'internal-pdf-viewer',
-                description: 'Portable Document Format',
-                mimeTypes: [pdfMime]
-            }});
-            const chromiumPdf = createPlugin({{
-                name: 'Chromium PDF Viewer',
-                filename: 'internal-pdf-viewer',
-                description: 'Portable Document Format',
-                mimeTypes: [pdfMime]
-            }});
-
-            pdfMime.enabledPlugin = pdfPlugin;
-            textPdfMime.enabledPlugin = pdfPlugin;
-
-            const pluginsList = Object.create(pluginArrayProto);
-            pluginsList[0] = pdfPlugin;
-            pluginsList[1] = chromePdf;
-            pluginsList[2] = chromiumPdf;
-            Object.defineProperty(pluginsList, 'length', {{ value: 3, enumerable: false }});
-            pluginsList.item = function(index) {{ return this[index] || null; }};
-            pluginsList.namedItem = function(name) {{
-                for (let i = 0; i < this.length; i++) {{
-                    if (this[i].name === name) return this[i];
-                }}
-                return null;
-            }};
-            pluginsList.refresh = function() {{}};
-
-            Object.defineProperty(Object.getPrototypeOf(navigator) || navigator, 'plugins', {{
-                get: () => pluginsList,
-                configurable: true,
-                enumerable: true
-            }});
-
-            const mimeList = Object.create(mimeTypeArrayProto);
-            mimeList[0] = pdfMime;
-            mimeList[1] = textPdfMime;
-            Object.defineProperty(mimeList, 'length', {{ value: 2, enumerable: false }});
-            mimeList.item = function(index) {{ return this[index] || null; }};
-            mimeList.namedItem = function(name) {{
-                for (let i = 0; i < this.length; i++) {{
-                    if (this[i].type === name) return this[i];
-                }}
-                return null;
-            }};
-
-            Object.defineProperty(Object.getPrototypeOf(navigator) || navigator, 'mimeTypes', {{
-                get: () => mimeList,
-                configurable: true,
-                enumerable: true
-            }});
         }} catch(e) {{}}
 
         // 6. Configurações complementares de ambiente Desktop
@@ -321,50 +247,29 @@ def build_stealth_injection_script(profile: FingerprintProfile) -> str:
             const primaryLocale = config.locale || 'pt-BR';
             const baseLang = primaryLocale.split('-')[0];
             Object.defineProperty(navProto, 'languages', {{
-                get: () => [primaryLocale, baseLang, 'en-US', 'en'],
+                get: makeNative(() => [primaryLocale, baseLang, 'en-US', 'en'], 'get languages'),
                 configurable: true,
                 enumerable: true
             }});
 
             Object.defineProperty(navProto, 'platform', {{
-                get: () => config.platform,
+                get: makeNative(() => config.platform || 'Win32', 'get platform'),
                 configurable: true,
                 enumerable: true
             }});
 
             Object.defineProperty(window, 'outerWidth', {{
-                get: () => config.outerWidth,
+                get: makeNative(() => config.outerWidth, 'get outerWidth'),
                 configurable: true
             }});
             Object.defineProperty(window, 'outerHeight', {{
-                get: () => config.outerHeight,
+                get: makeNative(() => config.outerHeight, 'get outerHeight'),
                 configurable: true
             }});
 
-            Object.defineProperty(screen, 'width', {{ get: () => config.screenWidth, configurable: true }});
-            Object.defineProperty(screen, 'height', {{ get: () => config.screenHeight, configurable: true }});
-            Object.defineProperty(screen, 'availWidth', {{ get: () => config.screenWidth, configurable: true }});
-            Object.defineProperty(screen, 'availHeight', {{ get: () => config.screenHeight - 40, configurable: true }});
-            Object.defineProperty(screen, 'colorDepth', {{ get: () => 24, configurable: true }});
-            Object.defineProperty(screen, 'pixelDepth', {{ get: () => 24, configurable: true }});
-
-            Object.defineProperty(window, 'devicePixelRatio', {{
-                get: () => config.deviceScaleFactor,
-                configurable: true
-            }});
-
-            // Previne throttled playback e pausas automáticas do YouTube em headless
-            Object.defineProperty(document, 'hidden', {{ get: () => false, configurable: true }});
-            Object.defineProperty(document, 'visibilityState', {{ get: () => 'visible', configurable: true }});
-
-            // Timezone spoofing via Intl
-            try {{
-                const origResolved = Intl.DateTimeFormat.prototype.resolvedOptions;
-                Intl.DateTimeFormat.prototype.resolvedOptions = function() {{
-                    const opts = origResolved.apply(this, arguments);
-                    opts.timeZone = config.timezone;
-                    return opts;
-                }};
-            }} catch(e) {{}}
+            Object.defineProperty(screen, 'width', {{ get: makeNative(() => config.screenWidth, 'get width'), configurable: true }});
+            Object.defineProperty(screen, 'height', {{ get: makeNative(() => config.screenHeight, 'get height'), configurable: true }});
+            Object.defineProperty(screen, 'colorDepth', {{ get: makeNative(() => 24, 'get colorDepth'), configurable: true }});
+            Object.defineProperty(screen, 'pixelDepth', {{ get: makeNative(() => 24, 'get pixelDepth'), configurable: true }});
         }} catch(e) {{}}
     }})();"""

@@ -235,7 +235,16 @@ async def watch_video(
             video_state = await page.evaluate("""() => {
                 const video = document.querySelector('video');
                 const player = document.getElementById('movie_player') || document.querySelector('.html5-video-player');
-                if (!video) return { exists: false };
+                const errElem = document.querySelector('.ytp-error, .ytp-error-content');
+                const errText = errElem ? (errElem.innerText || '') : '';
+                const isPlaybackError = Boolean(
+                    errText.includes('Algo deu errado') ||
+                    errText.includes('Ocorreu um erro') ||
+                    errText.includes('Erro de reprodução') ||
+                    errText.includes('An error occurred') ||
+                    errText.includes('Playback error')
+                );
+                if (!video) return { exists: false, isPlaybackError, errText };
                 const isAd = Boolean(
                     document.querySelector('.ad-showing, .ad-interrupting, .ytp-ad-player-overlay') ||
                     (player && player.classList && (player.classList.contains('ad-showing') || player.classList.contains('ad-interrupting')))
@@ -248,9 +257,41 @@ async def watch_video(
                     duration: video.duration,
                     readyState: video.readyState,
                     playerState: player && typeof player.getPlayerState === 'function' ? player.getPlayerState() : -1,
-                    isAd: isAd
+                    isAd: isAd,
+                    isPlaybackError: isPlaybackError,
+                    errText: errText
                 };
             }""")
+
+            if video_state.get("isPlaybackError"):
+                logger.warning(
+                    f"[Worker {worker_id}] ⚠️ Tela de erro do YouTube detectada: "
+                    f"'{video_state.get('errText', '')[:60]}...'. Limpando sessão corrompida e reiniciando player..."
+                )
+                if getattr(config, "use_persistent_profiles", False):
+                    try:
+                        from pathlib import Path
+                        prof_path = Path(getattr(config, "profiles_dir", "profiles")) / f"worker_{worker_id}" / "storage_state.json"
+                        if prof_path.exists():
+                            prof_path.unlink()
+                    except Exception:
+                        pass
+                try:
+                    await page.context.clear_cookies()
+                except Exception:
+                    pass
+                last_recovery_time = current_now
+                stuck_buffer_count = 0
+                last_progress_time = current_now
+                last_video_current_time = None
+                try:
+                    await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    await asyncio.sleep(2.0)
+                    await handle_consent_popups(page)
+                    await ensure_video_playing(page, mute_audio=config.mute_audio, low_bandwidth=is_low_bw)
+                except Exception as e:
+                    logger.debug(f"[Worker {worker_id}] Falha ao recarregar após erro: {e}")
+                continue
 
             if video_state.get("exists"):
                 current_ct = float(video_state.get("currentTime") or 0.0)
